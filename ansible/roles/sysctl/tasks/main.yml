@@ -1,0 +1,19 @@
+---
+- name: load conntrack module
+  community.general.modprobe:
+    name: nf_conntrack
+    state: present
+
+- name: persist conntrack module
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/nf_conntrack.conf
+    mode: "0644"
+    content: "nf_conntrack\n"
+
+- name: apply sysctl parameters
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-custom.conf
+    reload: true
+  loop: "{{ sysctl_params | dict2items }}"

@@ -1,0 +1,4 @@
+Infrastructure Node: {{ inventory_hostname }}
+Internal AWG IP:    {{ awg_ip | default('N/A') }}
+Architecture:       {{ ansible_facts['architecture'] | default('x86_64') }}
+Kernel:             {{ ansible_facts['kernel'] | default('Linux') }}

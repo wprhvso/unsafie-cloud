@@ -1,0 +1,6 @@
+---
+- name: configure amnezia wireguard mesh
+  hosts: mesh
+  become: true
+  roles:
+    - awg

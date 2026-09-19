@@ -1,0 +1,4 @@
+---
+vault_awg_privkey_node1: "privkey_node1_vault_placeholder"
+vault_awg_privkey_node2: "privkey_node2_vault_placeholder"
+vault_awg_privkey_node3: "privkey_node3_vault_placeholder"

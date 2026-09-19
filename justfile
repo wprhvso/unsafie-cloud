@@ -21,3 +21,12 @@ typecheck:
 
 test:
     uv run pytest tests/ -v
+
+ansible-check:
+    ansible-playbook -i ansible/hosts.ini ansible/site.yml --syntax-check
+
+awg-mesh:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/awg_mesh.yml
+
+bootstrap:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/bootstrap.yml
