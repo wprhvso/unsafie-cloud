@@ -1,0 +1,16 @@
+etcd-s3: true
+etcd-s3-endpoint: "{{ backup_s3_endpoint | regex_replace('^https?://', '') }}"
+etcd-s3-bucket: "{{ backup_s3_bucket }}"
+etcd-s3-folder: "k3s-etcd"
+etcd-s3-access-key: "{{ vault_backup_s3_access_key | default('') }}"
+etcd-s3-secret-key: "{{ vault_backup_s3_secret_key | default('') }}"
+etcd-s3-region: "{{ backup_s3_region }}"
+etcd-s3-snapshot-schedule: "0 */4 * * *"
+etcd-s3-snapshot-retention: 28
+flannel-iface: "{{ awg_iface }}"
+node-ip: "{{ awg_ip }}"
+cluster-cidr: "{{ k3s_cluster_cidr }}"
+service-cidr: "{{ k3s_service_cidr }}"
+disable:
+  - traefik
+  - servicelb

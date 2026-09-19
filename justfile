@@ -108,3 +108,12 @@ restore-pocketbase host="all" key="":
 
 restore-garage host="all" key="":
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_garage.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+backup-db db:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml --tags {{ db }}
+
+dr-drill:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/disaster_recovery_drill.yml
+
+restore-k3s host="mesh[0]" snapshot="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_k3s.yml -e "target_host={{ host }} snapshot_name={{ snapshot }}"

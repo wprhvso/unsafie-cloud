@@ -22,3 +22,13 @@ scrape_configs:
           node: "{{ host }}"
           db: "postgres"
 {% endfor %}
+
+  - job_name: "backups"
+    scrape_interval: 30s
+    static_configs:
+{% for host in groups['mesh'] %}
+      - targets: ["{{ hostvars[host]['awg_ip'] }}:9100"]
+        labels:
+          node: "{{ host }}"
+          tier: "backups"
+{% endfor %}

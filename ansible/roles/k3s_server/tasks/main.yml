@@ -1,4 +1,16 @@
 ---
+- name: ensure k3s config directory exists
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0750"
+
+- name: template k3s server configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0600"
+
 - name: download k3s install script
   ansible.builtin.get_url:
     url: https://get.k3s.io
@@ -10,12 +22,6 @@
     cmd: >-
       /usr/local/bin/k3s-install.sh server
       --cluster-init
-      --flannel-iface={{ awg_iface }}
-      --node-ip={{ awg_ip }}
-      --cluster-cidr={{ k3s_cluster_cidr }}
-      --service-cidr={{ k3s_service_cidr }}
-      --disable=traefik
-      --disable=servicelb
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     K3S_TOKEN: "{{ k3s_token }}"
@@ -28,12 +34,6 @@
     cmd: >-
       /usr/local/bin/k3s-install.sh server
       --server https://{{ hostvars[groups['k3s_servers'][0]]['awg_ip'] }}:6443
-      --flannel-iface={{ awg_iface }}
-      --node-ip={{ awg_ip }}
-      --cluster-cidr={{ k3s_cluster_cidr }}
-      --service-cidr={{ k3s_service_cidr }}
-      --disable=traefik
-      --disable=servicelb
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     K3S_TOKEN: "{{ k3s_token }}"
