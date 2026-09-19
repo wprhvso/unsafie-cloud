@@ -27,3 +27,12 @@
     - backup_redpanda
     - backup_rabbitmq
     - backup_nats
+
+- name: configure backups for vector and standalone databases
+  hosts: mesh
+  become: true
+  roles:
+    - backup_qdrant
+    - backup_meilisearch
+    - backup_pocketbase
+    - backup_garage

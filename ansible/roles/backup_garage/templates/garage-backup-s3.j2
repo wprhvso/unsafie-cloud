@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -eo pipefail
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TMP_DIR="/tmp/garage_backup_${TIMESTAMP}"
+mkdir -p "$TMP_DIR"
+
+if command -v mdb_dump >/dev/null 2>&1 && [ -d "{{ garage_meta_dir }}" ]; then
+    mdb_dump -s data "{{ garage_meta_dir }}" > "$TMP_DIR/garage_meta.dump" 2>/dev/null || true
+fi
+
+if command -v garage >/dev/null 2>&1; then
+    garage status > "$TMP_DIR/status.txt" 2>/dev/null || true
+    garage key list --json > "$TMP_DIR/keys.json" 2>/dev/null || true
+    garage bucket list --json > "$TMP_DIR/buckets.json" 2>/dev/null || true
+fi
+
+TMP_ARCHIVE="/tmp/garage_${TIMESTAMP}.tar.zst"
+tar -cf - -C "$TMP_DIR" . | zstd -3 > "$TMP_ARCHIVE"
+
+/usr/local/bin/infra-s3-client upload "$TMP_ARCHIVE" "garage/{{ inventory_hostname }}/garage_${TIMESTAMP}.tar.zst"
+
+rm -rf "$TMP_DIR" "$TMP_ARCHIVE"

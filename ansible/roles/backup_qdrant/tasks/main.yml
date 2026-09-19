@@ -1,0 +1,26 @@
+---
+- name: template qdrant backup runner script
+  ansible.builtin.template:
+    src: qdrant-backup-s3.j2
+    dest: /usr/local/bin/qdrant-backup-s3
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: template qdrant backup systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - qdrant-backup.service
+    - qdrant-backup.timer
+
+- name: enable and start qdrant backup timer
+  ansible.builtin.systemd:
+    name: qdrant-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

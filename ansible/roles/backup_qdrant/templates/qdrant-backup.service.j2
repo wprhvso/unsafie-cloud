@@ -1,0 +1,12 @@
+[Unit]
+Description=Qdrant Vector Database S3 Backup
+After=qdrant.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/infra-backup-runner qdrant /usr/local/bin/qdrant-backup-s3
+StandardOutput=journal
+StandardError=journal

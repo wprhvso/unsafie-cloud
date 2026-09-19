@@ -96,3 +96,15 @@ restore-rabbitmq host="all" key="":
 
 restore-nats host="all" key="":
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_nats.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-qdrant host="all" col="" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_qdrant.yml -e "target_host={{ host }} collection_name={{ col }} s3_archive_key={{ key }}"
+
+restore-meilisearch host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_meilisearch.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-pocketbase host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_pocketbase.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-garage host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_garage.yml -e "target_host={{ host }} s3_archive_key={{ key }}"

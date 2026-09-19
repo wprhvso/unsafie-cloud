@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+HOST="127.0.0.1:{{ meilisearch_backup_port }}"
+
+TASK_UID=$(curl -sf -X POST "http://$HOST/dumps" | jq -r '.taskUid' 2>/dev/null || true)
+
+if [ -n "$TASK_UID" ] && [ "$TASK_UID" != "null" ]; then
+    for _ in $(seq 1 60); do
+        STATUS=$(curl -sf "http://$HOST/tasks/$TASK_UID" | jq -r '.status' 2>/dev/null || true)
+        if [ "$STATUS" = "succeeded" ]; then
+            break
+        fi
+        sleep 2
+    done
+fi
+
+curl -sf -X POST "http://$HOST/snapshots" >/dev/null 2>&1 || true
+
+DUMP_DIR="/var/lib/meilisearch/dumps"
+if [ -d "$DUMP_DIR" ]; then
+    for dump in "$DUMP_DIR"/*.dump; do
+        if [ -f "$dump" ]; then
+            BASE_NAME=$(basename "$dump")
+            /usr/local/bin/infra-s3-client upload "$dump" "meilisearch/{{ inventory_hostname }}/dumps/$BASE_NAME"
+            rm -f "$dump"
+        fi
+    done
+fi

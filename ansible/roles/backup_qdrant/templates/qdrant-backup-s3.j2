@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+HOST="127.0.0.1:{{ qdrant_backup_port }}"
+COLLECTIONS=$(curl -sf "http://$HOST/collections" | jq -r '.result.collections[].name' 2>/dev/null || true)
+
+for col in $COLLECTIONS; do
+    SNAP_NAME=$(curl -sf -X POST "http://$HOST/collections/$col/snapshots" | jq -r '.result.name' 2>/dev/null || true)
+    if [ -n "$SNAP_NAME" ] && [ "$SNAP_NAME" != "null" ]; then
+        TMP_SNAP="/tmp/${col}_${SNAP_NAME}"
+        curl -sf "http://$HOST/collections/$col/snapshots/$SNAP_NAME" -o "$TMP_SNAP"
+        /usr/local/bin/infra-s3-client upload "$TMP_SNAP" "qdrant/{{ inventory_hostname }}/${col}_${SNAP_NAME}"
+        curl -sf -X DELETE "http://$HOST/collections/$col/snapshots/$SNAP_NAME" >/dev/null 2>&1 || true
+        rm -f "$TMP_SNAP"
+    fi
+done

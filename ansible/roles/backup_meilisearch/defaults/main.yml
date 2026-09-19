@@ -1,0 +1,3 @@
+---
+meilisearch_backup_port: 7700
+meilisearch_backup_retain_days: 14

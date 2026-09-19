@@ -1,0 +1,36 @@
+---
+- name: restore meilisearch from s3 dump
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  vars:
+    tmp_dump: "/var/lib/meilisearch/dumps/restore_{{ ansible_date_time.epoch }}.dump"
+  tasks:
+    - name: stop meilisearch service
+      ansible.builtin.systemd:
+        name: meilisearch
+        state: stopped
+
+    - name: download meilisearch dump from s3
+      ansible.builtin.command:
+        cmd: "/usr/local/bin/infra-s3-client download {{ s3_archive_key }} {{ tmp_dump }}"
+
+    - name: backup existing meilisearch data directory
+      ansible.builtin.command:
+        cmd: "mv /var/lib/meilisearch/data.ms /var/lib/meilisearch/data.ms.bak.{{ ansible_date_time.epoch }}"
+      failed_when: false
+
+    - name: import meilisearch dump
+      ansible.builtin.command:
+        cmd: "meilisearch --import-dump {{ tmp_dump }}"
+      environment:
+        MEILI_DB_PATH: "/var/lib/meilisearch/data.ms"
+
+    - name: clean up temporary dump file
+      ansible.builtin.file:
+        path: "{{ tmp_dump }}"
+        state: absent
+
+    - name: start meilisearch service
+      ansible.builtin.systemd:
+        name: meilisearch
+        state: started
