@@ -1,0 +1,44 @@
+---
+- name: restore valkey from s3 backup
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  vars:
+    tmp_rdb: "/tmp/restore_valkey_{{ ansible_date_time.epoch }}.rdb.zst"
+  tasks:
+    - name: stop valkey service
+      ansible.builtin.systemd:
+        name: valkey-server
+        state: stopped
+
+    - name: download valkey rdb dump from s3
+      ansible.builtin.command:
+        cmd: "/usr/local/bin/infra-s3-client download {{ s3_archive_key }} {{ tmp_rdb }}"
+
+    - name: decompress rdb dump
+      ansible.builtin.shell:
+        cmd: "zstd -d -c {{ tmp_rdb }} > /var/lib/valkey/dump.rdb"
+
+    - name: set valkey permissions on dump
+      ansible.builtin.file:
+        path: /var/lib/valkey/dump.rdb
+        owner: valkey
+        group: valkey
+        mode: "0640"
+
+    - name: remove temporary download
+      ansible.builtin.file:
+        path: "{{ tmp_rdb }}"
+        state: absent
+
+    - name: start valkey service
+      ansible.builtin.systemd:
+        name: valkey-server
+        state: started
+
+    - name: verify valkey responsiveness
+      ansible.builtin.command:
+        cmd: "valkey-cli ping"
+      register: ping_check
+      retries: 10
+      delay: 1
+      until: ping_check.stdout == 'PONG'

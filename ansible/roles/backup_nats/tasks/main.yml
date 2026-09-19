@@ -1,0 +1,32 @@
+---
+- name: install nats cli deb package
+  ansible.builtin.apt:
+    deb: "https://github.com/nats-io/natscli/releases/download/v{{ nats_cli_version }}/nats-{{ nats_cli_version }}-amd64.deb"
+    state: present
+  ignore_errors: true
+
+- name: template nats backup runner script
+  ansible.builtin.template:
+    src: nats-backup-s3.j2
+    dest: /usr/local/bin/nats-backup-s3
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: template nats backup systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - nats-backup.service
+    - nats-backup.timer
+
+- name: enable and start nats backup timer
+  ansible.builtin.systemd:
+    name: nats-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

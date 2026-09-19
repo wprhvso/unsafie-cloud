@@ -1,0 +1,12 @@
+[Unit]
+Description=Valkey S3 Backup
+After=valkey-server.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/infra-backup-runner valkey /usr/local/bin/valkey-backup-s3
+StandardOutput=journal
+StandardError=journal

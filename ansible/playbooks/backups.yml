@@ -12,14 +12,18 @@
     - walg
     - backup_platform_db
 
-- name: configure backups for clickhouse
+- name: configure backups for analytical and document databases
   hosts: mesh
   become: true
   roles:
     - backup_clickhouse
+    - backup_mongo
 
-- name: configure backups for mongodb
+- name: configure backups for in-memory and messaging brokers
   hosts: mesh
   become: true
   roles:
-    - backup_mongo
+    - backup_valkey
+    - backup_redpanda
+    - backup_rabbitmq
+    - backup_nats

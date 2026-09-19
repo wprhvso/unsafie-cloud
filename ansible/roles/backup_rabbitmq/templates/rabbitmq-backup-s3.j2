@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -eo pipefail
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TMP_DIR="/tmp/rabbitmq_backup_${TIMESTAMP}"
+mkdir -p "$TMP_DIR"
+
+rabbitmqctl export_definitions "$TMP_DIR/definitions.json" 2>/dev/null || true
+
+if [ -d /var/lib/rabbitmq/mnesia ]; then
+    cp -r /var/lib/rabbitmq/mnesia "$TMP_DIR/" 2>/dev/null || true
+fi
+
+TMP_ARCHIVE="/tmp/rabbitmq_${TIMESTAMP}.tar.zst"
+tar -cf - -C "$TMP_DIR" . | zstd -3 > "$TMP_ARCHIVE"
+
+/usr/local/bin/infra-s3-client upload "$TMP_ARCHIVE" "rabbitmq/{{ inventory_hostname }}/rabbit_${TIMESTAMP}.tar.zst"
+
+rm -rf "$TMP_DIR" "$TMP_ARCHIVE"

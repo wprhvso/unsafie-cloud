@@ -1,0 +1,12 @@
+[Unit]
+Description=NATS JetStream S3 Backup
+After=nats.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/infra-backup-runner nats /usr/local/bin/nats-backup-s3
+StandardOutput=journal
+StandardError=journal

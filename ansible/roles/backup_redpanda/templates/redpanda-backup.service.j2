@@ -1,0 +1,12 @@
+[Unit]
+Description=Redpanda S3 Metadata Backup
+After=redpanda.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/infra-backup-runner redpanda /usr/local/bin/redpanda-backup-s3
+StandardOutput=journal
+StandardError=journal

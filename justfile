@@ -84,3 +84,15 @@ restore-mongo host="all" key="":
 
 restore-platform-db host="mesh[0]" key="":
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_platform_db.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-valkey host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_valkey.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-redpanda host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_redpanda.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-rabbitmq host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_rabbitmq.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-nats host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_nats.yml -e "target_host={{ host }} s3_archive_key={{ key }}"

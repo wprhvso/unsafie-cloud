@@ -1,0 +1,26 @@
+---
+- name: template valkey backup runner script
+  ansible.builtin.template:
+    src: valkey-backup-s3.j2
+    dest: /usr/local/bin/valkey-backup-s3
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: template valkey backup systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - valkey-backup.service
+    - valkey-backup.timer
+
+- name: enable and start valkey backup timer
+  ansible.builtin.systemd:
+    name: valkey-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

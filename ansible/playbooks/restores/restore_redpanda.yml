@@ -1,0 +1,31 @@
+---
+- name: restore redpanda metadata and tiered storage
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  vars:
+    tmp_dir: "/tmp/restore_redpanda_{{ ansible_date_time.epoch }}"
+  tasks:
+    - name: create temporary extraction directory
+      ansible.builtin.file:
+        path: "{{ tmp_dir }}"
+        state: directory
+        mode: "0750"
+
+    - name: download redpanda metadata from s3
+      ansible.builtin.command:
+        cmd: "/usr/local/bin/infra-s3-client download {{ s3_archive_key }} {{ tmp_dir }}/metadata.tar.zst"
+
+    - name: unarchive redpanda metadata
+      ansible.builtin.shell:
+        cmd: "tar -I zstd -xf {{ tmp_dir }}/metadata.tar.zst -C {{ tmp_dir }}"
+
+    - name: apply cluster configuration
+      ansible.builtin.command:
+        cmd: "rpk cluster config import -f {{ tmp_dir }}/cluster_config.json"
+      when: lookup('file', tmp_dir + '/cluster_config.json', errors='ignore') != ''
+      ignore_errors: true
+
+    - name: clean up temporary directory
+      ansible.builtin.file:
+        path: "{{ tmp_dir }}"
+        state: absent

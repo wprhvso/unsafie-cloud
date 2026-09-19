@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+HOST="127.0.0.1"
+PORT="{{ valkey_backup_port }}"
+
+LAST_SAVE=$(valkey-cli -h "$HOST" -p "$PORT" lastsave 2>/dev/null || echo 0)
+valkey-cli -h "$HOST" -p "$PORT" bgsave >/dev/null 2>&1 || true
+
+for _ in $(seq 1 60); do
+    CURRENT_SAVE=$(valkey-cli -h "$HOST" -p "$PORT" lastsave 2>/dev/null || echo 0)
+    if [ "$CURRENT_SAVE" -gt "$LAST_SAVE" ]; then
+        break
+    fi
+    sleep 1
+done
+
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TMP_RDB="/tmp/valkey_${TIMESTAMP}.rdb.zst"
+
+if [ -f /var/lib/valkey/dump.rdb ]; then
+    zstd -3 -c /var/lib/valkey/dump.rdb > "$TMP_RDB"
+    /usr/local/bin/infra-s3-client upload "$TMP_RDB" "valkey/{{ inventory_hostname }}/dump_${TIMESTAMP}.rdb.zst"
+    rm -f "$TMP_RDB"
+fi
+
+if [ -d /var/lib/valkey/appendonlydir ]; then
+    TMP_AOF="/tmp/valkey_aof_${TIMESTAMP}.tar.zst"
+    tar -cf - -C /var/lib/valkey appendonlydir | zstd -3 > "$TMP_AOF"
+    /usr/local/bin/infra-s3-client upload "$TMP_AOF" "valkey/{{ inventory_hostname }}/aof_${TIMESTAMP}.tar.zst"
+    rm -f "$TMP_AOF"
+fi

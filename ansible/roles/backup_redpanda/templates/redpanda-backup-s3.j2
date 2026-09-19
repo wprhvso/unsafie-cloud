@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -eo pipefail
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TMP_DIR="/tmp/redpanda_meta_${TIMESTAMP}"
+mkdir -p "$TMP_DIR"
+
+rpk cluster config export -f "$TMP_DIR/cluster_config.json" 2>/dev/null || true
+rpk topic list --detailed > "$TMP_DIR/topics.txt" 2>/dev/null || true
+rpk security acl list > "$TMP_DIR/acls.txt" 2>/dev/null || true
+
+TMP_ARCHIVE="/tmp/redpanda_metadata_${TIMESTAMP}.tar.zst"
+tar -cf - -C "$TMP_DIR" . | zstd -3 > "$TMP_ARCHIVE"
+
+/usr/local/bin/infra-s3-client upload "$TMP_ARCHIVE" "redpanda/{{ inventory_hostname }}/metadata_${TIMESTAMP}.tar.zst"
+
+rm -rf "$TMP_DIR" "$TMP_ARCHIVE"
