@@ -105,7 +105,9 @@ def _declared(tenants: object) -> list[tuple[str, list[object]]]:
         settings: Any = tenants[name] or {}
         if not isinstance(settings, Mapping):
             raise AnsibleFilterError(f"tenant {name!r} must be a mapping, got {settings!r}")
-        entries = sorted(str(e).strip() for e in _entries(settings.get("domains"), f"tenant {name!r}"))
+        entries = sorted(
+            str(e).strip() for e in _entries(settings.get("domains"), f"tenant {name!r}")
+        )
         if entries:
             out.append((name, entries))
     return out
@@ -113,7 +115,11 @@ def _declared(tenants: object) -> list[tuple[str, list[object]]]:
 
 def tenant_certificates(tenants: object, domain: str, prefix: str = "tls-") -> list[dict[str, Any]]:
     return [
-        {"tenant": name, "secret": f"{prefix}{name}", "dns_names": tenant_dns_names(entries, domain)}
+        {
+            "tenant": name,
+            "secret": f"{prefix}{name}",
+            "dns_names": tenant_dns_names(entries, domain),
+        }
         for name, entries in _declared(tenants)
     ]
 
@@ -125,12 +131,14 @@ def tenant_gateway_listeners(
     for name, entries in _declared(tenants):
         for index, entry in enumerate(entries):
             wildcard, rest = _split(entry)
-            listeners.append({
-                "name": f"{name}-{index}",
-                "tenant": name,
-                "secret": f"{prefix}{name}",
-                "hostname": f"*.{rest}.{domain}" if wildcard else f"{rest}.{domain}",
-            })
+            listeners.append(
+                {
+                    "name": f"{name}-{index}",
+                    "tenant": name,
+                    "secret": f"{prefix}{name}",
+                    "hostname": f"*.{rest}.{domain}" if wildcard else f"{rest}.{domain}",
+                }
+            )
     return listeners
 
 

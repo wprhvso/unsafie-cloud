@@ -90,8 +90,20 @@ def test_a_bare_string_is_not_a_list_of_domains():
 
 
 def test_bad_entries_are_refused():
-    for bad in ("", "  ", ".demo", "demo.", "*", "a.*.b", "Demo", "de_mo", "-demo", "demo-",
-                "*.", "a" * 64):
+    for bad in (
+        "",
+        "  ",
+        ".demo",
+        "demo.",
+        "*",
+        "a.*.b",
+        "Demo",
+        "de_mo",
+        "-demo",
+        "demo-",
+        "*.",
+        "a" * 64,
+    ):
         check_raises(f"entry {bad!r}", d.tenant_dns_names, [bad], DOMAIN)
     check_true("63-label ok", d.tenant_dns_names(["a" * 63], DOMAIN) == ["a" * 63 + "." + DOMAIN])
 
@@ -156,11 +168,13 @@ def test_malformed_tenant_entries_are_refused():
 
 
 def test_conflicts_are_reported_for_every_pair():
-    got = conflicts({
-        "a": {"domains": ["demo", "*.demo"]},
-        "b": {"domains": ["demo"]},
-        "c": {"domains": ["app.demo"]},
-    })
+    got = conflicts(
+        {
+            "a": {"domains": ["demo", "*.demo"]},
+            "b": {"domains": ["demo"]},
+            "c": {"domains": ["app.demo"]},
+        }
+    )
     check_true(f"two problems, got {got}", len(got) == 2)
 
 
@@ -213,12 +227,21 @@ def test_listener_names_survive_reordering_the_file():
 def test_gateway_filters_refuse_the_same_malformed_input():
     check_raises("certificates from list", d.tenant_certificates, ["x"], DOMAIN)
     check_raises("listeners from list", d.tenant_gateway_listeners, ["x"], DOMAIN)
-    check_raises("certificates bare string domains", d.tenant_certificates,
-                 {"x": {"domains": "volkov"}}, DOMAIN)
-    check_raises("listeners bare string domains", d.tenant_gateway_listeners,
-                 {"x": {"domains": "volkov"}}, DOMAIN)
-    check_raises("listeners bad entry", d.tenant_gateway_listeners,
-                 {"x": {"domains": ["Bad"]}}, DOMAIN)
+    check_raises(
+        "certificates bare string domains",
+        d.tenant_certificates,
+        {"x": {"domains": "volkov"}},
+        DOMAIN,
+    )
+    check_raises(
+        "listeners bare string domains",
+        d.tenant_gateway_listeners,
+        {"x": {"domains": "volkov"}},
+        DOMAIN,
+    )
+    check_raises(
+        "listeners bad entry", d.tenant_gateway_listeners, {"x": {"domains": ["Bad"]}}, DOMAIN
+    )
 
 
 def main():

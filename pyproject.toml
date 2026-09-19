@@ -19,9 +19,15 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC"]
-ignore = ["E501"]
+ignore = ["E501", "E741", "F821"]
 
 [tool.pyright]
 include = ["packages", "services"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]

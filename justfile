@@ -23,6 +23,10 @@ typecheck:
 test:
     python3 tests/test_quantity.py
     python3 tests/test_domains.py
+    uv run pytest tests/test_db_schema.py
+
+db-migrate:
+    uv run --package infra-db alembic upgrade head
 
 ansible-check:
     ansible-playbook -i ansible/hosts.ini ansible/site.yml --syntax-check

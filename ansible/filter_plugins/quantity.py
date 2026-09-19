@@ -9,10 +9,25 @@ from ansible.errors import AnsibleFilterError
 Quantity = str | int | float
 
 _BINARY: dict[str, int] = {
-    "Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "Pi": 2**50, "Ei": 2**60,
+    "Ki": 2**10,
+    "Mi": 2**20,
+    "Gi": 2**30,
+    "Ti": 2**40,
+    "Pi": 2**50,
+    "Ei": 2**60,
 }
-_DECIMAL: dict[str, Fraction | int] = {"n": Fraction(1, 10**9), "u": Fraction(1, 10**6), "m": Fraction(1, 10**3),
-            "": 1, "k": 10**3, "M": 10**6, "G": 10**9, "T": 10**12, "P": 10**15, "E": 10**18}
+_DECIMAL: dict[str, Fraction | int] = {
+    "n": Fraction(1, 10**9),
+    "u": Fraction(1, 10**6),
+    "m": Fraction(1, 10**3),
+    "": 1,
+    "k": 10**3,
+    "M": 10**6,
+    "G": 10**9,
+    "T": 10**12,
+    "P": 10**15,
+    "E": 10**18,
+}
 
 _RE = re.compile(r"^(?P<num>[+-]?\d+(?:\.\d+)?)(?P<suffix>Ki|Mi|Gi|Ti|Pi|Ei|[numkMGTPE])?$")
 
@@ -36,7 +51,7 @@ def _parse(value: Quantity) -> tuple[Fraction, str]:
 
 def _render(total: Fraction, suffix: str, round_up: bool = True) -> str:
     ladder = _BINARY_LADDER if suffix in _BINARY else _DECIMAL_LADDER
-    candidates = ladder[ladder.index(suffix):]
+    candidates = ladder[ladder.index(suffix) :]
     for candidate in candidates:
         scaled = total / _factor(candidate)
         if scaled.denominator == 1:
