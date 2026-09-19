@@ -17,7 +17,7 @@
     "list": [
       {
         "name": "env",
-        "label": "Окружение",
+        "label": "Environment",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -74,12 +74,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "нет",
+                  "text": "no",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "да",
+                  "text": "yes",
                   "color": "green",
                   "index": 1
                 }
@@ -122,7 +122,7 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Соединений",
+      "title": "Connections",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -182,7 +182,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Размер базы",
+      "title": "Database size",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -310,7 +310,7 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Дедлоков за сутки",
+      "title": "Deadlocks per day",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -374,7 +374,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Транзакции, в секунду",
+      "title": "Transactions, per second",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -451,7 +451,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Соединения по базам",
+      "title": "Connections by database",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -517,7 +517,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Кортежи, в секунду",
+      "title": "Tuples, per second",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -616,7 +616,7 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Блоки, в секунду",
+      "title": "Blocks, per second",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -634,7 +634,7 @@
             "uid": "prometheus"
           },
           "expr": "sum by (env) (rate(pg_stat_database_blks_hit{env=~\"$env\"}[5m]))",
-          "legendFormat": "из кэша {{env}}",
+          "legendFormat": "cache hit {{env}}",
           "refId": "H",
           "instant": false,
           "range": true
@@ -645,7 +645,7 @@
             "uid": "prometheus"
           },
           "expr": "sum by (env) (rate(pg_stat_database_blks_read{env=~\"$env\"}[5m]))",
-          "legendFormat": "с диска {{env}}",
+          "legendFormat": "disk read {{env}}",
           "refId": "H",
           "instant": false,
           "range": true

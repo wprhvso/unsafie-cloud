@@ -1,6 +1,6 @@
 {
   "uid": "platform-backups",
-  "title": "Бэкапы",
+  "title": "Backups",
   "tags": [
     "platform"
   ],
@@ -17,7 +17,7 @@
     "list": [
       {
         "name": "env",
-        "label": "Окружение",
+        "label": "Environment",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -38,7 +38,7 @@
       },
       {
         "name": "db",
-        "label": "СУБД",
+        "label": "DBMS",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -63,7 +63,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Последний бэкап",
+      "title": "Latest backup",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -95,12 +95,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "ошибка",
+                  "text": "error",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "успех",
+                  "text": "success",
                   "color": "green",
                   "index": 1
                 }
@@ -143,7 +143,7 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Возраст бэкапа (алерт на 24 ч)",
+      "title": "Backup age (alert at 24h)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -207,7 +207,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Ошибок архивации WAL за 15 мин",
+      "title": "WAL archiving errors (15m)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -271,7 +271,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Итог ночного бэкапа",
+      "title": "Nightly backup status",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -345,7 +345,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Время с последнего успешного бэкапа",
+      "title": "Time since last successful backup",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -418,7 +418,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Архивация WAL, сегментов в секунду",
+      "title": "WAL archiving, segments/s",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -436,7 +436,7 @@
             "uid": "prometheus"
           },
           "expr": "rate(pg_stat_archiver_archived_count{env=~\"$env\"}[5m])",
-          "legendFormat": "заархивировано {{env}} {{instance}}",
+          "legendFormat": "archived {{env}} {{instance}}",
           "refId": "B",
           "instant": false,
           "range": true
@@ -447,7 +447,7 @@
             "uid": "prometheus"
           },
           "expr": "rate(pg_stat_archiver_failed_count{env=~\"$env\"}[5m])",
-          "legendFormat": "ошибок {{env}} {{instance}}",
+          "legendFormat": "errors {{env}} {{instance}}",
           "refId": "T",
           "instant": false,
           "range": true
@@ -495,7 +495,7 @@
     {
       "id": 10,
       "type": "stat",
-      "title": "Статус бэкапов всех СУБД",
+      "title": "All DBMS backup status",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -527,12 +527,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "ошибка",
+                  "text": "error",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "успех",
+                  "text": "success",
                   "color": "green",
                   "index": 1
                 }
@@ -573,7 +573,7 @@
     {
       "id": 11,
       "type": "stat",
-      "title": "Тестирование восстановления (DR Drill)",
+      "title": "DR restore drill",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -605,12 +605,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "сбой теста",
+                  "text": "drill failed",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "тест пройден",
+                  "text": "drill passed",
                   "color": "green",
                   "index": 1
                 }
@@ -651,7 +651,7 @@
     {
       "id": 12,
       "type": "stat",
-      "title": "Текущий RPO лаг СУБД",
+      "title": "Current DBMS RPO lag",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -712,7 +712,7 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "Размер бэкапа в S3 (байты)",
+      "title": "S3 backup size (bytes)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -760,7 +760,7 @@
     {
       "id": 14,
       "type": "timeseries",
-      "title": "Длительность процедуры бэкапа",
+      "title": "Backup duration",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

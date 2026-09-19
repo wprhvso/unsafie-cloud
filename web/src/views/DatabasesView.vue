@@ -24,7 +24,7 @@ const orderDb = async () => {
     await fetchDbs()
     form.value.db_name = ''
   } catch (err: any) {
-    alert(err.response?.data?.detail || 'Ошибка создания')
+    alert(err.response?.data?.detail || 'Creation error')
   } finally {
     loading.value = false
   }
@@ -36,8 +36,8 @@ onMounted(fetchDbs)
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-white">СУБД Data Hub</h1>
-      <p class="text-slate-400 text-sm mt-1">11 нативных баз данных в systemd с изоляцией прав и лимитами</p>
+      <h1 class="text-2xl font-bold text-white">Database Hub</h1>
+      <p class="text-slate-400 text-sm mt-1">11 native systemd databases with privilege isolation and limits</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -54,10 +54,10 @@ onMounted(fetchDbs)
       </div>
 
       <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-        <h3 class="text-lg font-bold text-white">Выдача базы данных</h3>
+        <h3 class="text-lg font-bold text-white">Provision Database</h3>
         <div class="space-y-3 text-sm">
           <div>
-            <label class="block text-slate-400 mb-1">СУБД</label>
+            <label class="block text-slate-400 mb-1">DBMS</label>
             <select v-model="form.db_type" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white">
               <option value="postgres">PostgreSQL 17</option>
               <option value="valkey">Valkey 8 (Redis)</option>
@@ -72,11 +72,11 @@ onMounted(fetchDbs)
             </select>
           </div>
           <div>
-            <label class="block text-slate-400 mb-1">Имя базы данных</label>
+            <label class="block text-slate-400 mb-1">Database Name</label>
             <input v-model="form.db_name" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white" placeholder="my_shop_db" />
           </div>
           <button @click="orderDb" :disabled="loading" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold text-white transition text-sm">
-            {{ loading ? 'Выдача...' : 'Выдать базу' }}
+            {{ loading ? 'Provisioning...' : 'Provision DB' }}
           </button>
         </div>
       </div>

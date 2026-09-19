@@ -1,6 +1,6 @@
 {
   "uid": "platform-overview",
-  "title": "Обзор",
+  "title": "Overview",
   "tags": [
     "platform"
   ],
@@ -17,7 +17,7 @@
     "list": [
       {
         "name": "env",
-        "label": "Окружение",
+        "label": "Environment",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -42,7 +42,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Цели мониторинга онлайн",
+      "title": "Targets online",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -102,7 +102,7 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Цели мониторинга офлайн",
+      "title": "Targets offline",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -198,12 +198,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "нет",
+                  "text": "no",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "да",
+                  "text": "yes",
                   "color": "green",
                   "index": 1
                 }
@@ -278,12 +278,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "нет",
+                  "text": "no",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "да",
+                  "text": "yes",
                   "color": "green",
                   "index": 1
                 }
@@ -326,7 +326,7 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Возраст последнего бэкапа",
+      "title": "Latest backup age",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -390,7 +390,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "CPU, % (алерт на 85)",
+      "title": "CPU, % (alert at 85)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -464,7 +464,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Память, % (алерт на 90)",
+      "title": "Memory, % (alert at 90)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -538,7 +538,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Корневой раздел, % (алерт на 85)",
+      "title": "Root filesystem, % (alert at 85)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -612,7 +612,7 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Запросы к nginx, rps",
+      "title": "Nginx requests, rps",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

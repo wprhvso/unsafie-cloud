@@ -17,7 +17,7 @@
     "list": [
       {
         "name": "env",
-        "label": "Окружение",
+        "label": "Environment",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -38,7 +38,7 @@
       },
       {
         "name": "route",
-        "label": "Маршрут",
+        "label": "Route",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -95,12 +95,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "нет",
+                  "text": "no",
                   "color": "red",
                   "index": 0
                 },
                 "1": {
-                  "text": "да",
+                  "text": "yes",
                   "color": "green",
                   "index": 1
                 }
@@ -143,7 +143,7 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Запросы, rps",
+      "title": "Requests, rps",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -203,7 +203,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "5xx к 2xx",
+      "title": "5xx to 2xx",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -271,7 +271,7 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "4xx к 2xx",
+      "title": "4xx to 2xx",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -339,7 +339,7 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "p95 задержка",
+      "title": "p95 latency",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -407,7 +407,7 @@
     {
       "id": 6,
       "type": "stat",
-      "title": "В обработке",
+      "title": "In flight",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -467,7 +467,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Запросы по классу ответа, rps",
+      "title": "Requests by status class, rps",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -579,7 +579,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Задержка, квантили",
+      "title": "Latency quantiles",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -667,7 +667,7 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Ошибки к 2xx, %",
+      "title": "Errors to 2xx, %",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -775,7 +775,7 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Запросы по маршрутам, rps",
+      "title": "Requests by route, rps",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -840,7 +840,7 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "p95 по маршрутам",
+      "title": "p95 by route",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -905,7 +905,7 @@
     {
       "id": 12,
       "type": "timeseries",
-      "title": "Необработанные исключения, в минуту",
+      "title": "Unhandled exceptions, per min",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -973,7 +973,7 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "Пул соединений с базой",
+      "title": "Database connection pool",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -991,7 +991,7 @@
             "uid": "prometheus"
           },
           "expr": "sum by (env) (db_pool_checked_out{env=~\"$env\"})",
-          "legendFormat": "занято {{env}}",
+          "legendFormat": "used {{env}}",
           "refId": "A",
           "instant": false,
           "range": true
@@ -1002,7 +1002,7 @@
             "uid": "prometheus"
           },
           "expr": "sum by (env) (db_pool_checked_in{env=~\"$env\"})",
-          "legendFormat": "свободно {{env}}",
+          "legendFormat": "free {{env}}",
           "refId": "B",
           "instant": false,
           "range": true
@@ -1061,7 +1061,7 @@
     {
       "id": 14,
       "type": "timeseries",
-      "title": "Память процесса",
+      "title": "Process memory",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1127,7 +1127,7 @@
     {
       "id": 15,
       "type": "timeseries",
-      "title": "CPU процесса",
+      "title": "Process CPU",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

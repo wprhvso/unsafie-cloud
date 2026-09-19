@@ -27,7 +27,7 @@ const createVm = async () => {
     await fetchVms()
     form.value.name = ''
   } catch (err: any) {
-    alert(err.response?.data?.detail || 'Ошибка создания')
+    alert(err.response?.data?.detail || 'Creation error')
   } finally {
     loading.value = false
   }
@@ -39,8 +39,8 @@ onMounted(fetchVms)
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-white">Виртуальные машины KVM</h1>
-      <p class="text-slate-400 text-sm mt-1">Аппаратная виртуализация на базе Incus / Libvirt</p>
+      <h1 class="text-2xl font-bold text-white">KVM Virtual Machines</h1>
+      <p class="text-slate-400 text-sm mt-1">Hardware virtualization powered by Incus / Libvirt</p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -60,18 +60,18 @@ onMounted(fetchVms)
       </div>
 
       <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-        <h3 class="text-lg font-bold text-white">Заказ KVM ВМ</h3>
+        <h3 class="text-lg font-bold text-white">Order KVM VM</h3>
         <div class="space-y-3 text-sm">
           <div>
-            <label class="block text-slate-400 mb-1">Имя ВМ</label>
+            <label class="block text-slate-400 mb-1">VM Name</label>
             <input v-model="form.name" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white" placeholder="vm-prod" />
           </div>
           <div>
-            <label class="block text-slate-400 mb-1">Нода размещения</label>
+            <label class="block text-slate-400 mb-1">Target Node</label>
             <select v-model="form.node" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white">
               <option value="node1-aeza">Node 1 (Aeza 9950X)</option>
               <option value="node2-cloud">Node 2 (Cloud Dedicated)</option>
-              <option value="node3-office">Node 3 (Офис за NAT)</option>
+              <option value="node3-office">Node 3 (Office behind NAT)</option>
             </select>
           </div>
           <div>
@@ -83,7 +83,7 @@ onMounted(fetchVms)
             <input type="range" v-model.number="form.ram_mb" min="1024" max="16384" step="1024" class="w-full" />
           </div>
           <button @click="createVm" :disabled="loading" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-semibold text-white transition text-sm">
-            {{ loading ? 'Создание...' : 'Заказать ВМ' }}
+            {{ loading ? 'Creating...' : 'Order VM' }}
           </button>
         </div>
       </div>

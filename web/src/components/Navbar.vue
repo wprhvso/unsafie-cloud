@@ -18,13 +18,13 @@ onMounted(() => {
           <span>Infrastructure</span>
         </router-link>
         <nav class="hidden md:flex space-x-1">
-          <router-link to="/dashboard" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">Обзор</router-link>
-          <router-link to="/tenants" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">K3s Тенанты</router-link>
-          <router-link to="/vms" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">Виртуалки KVM</router-link>
-          <router-link to="/databases" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">СУБД Hub</router-link>
-          <router-link to="/storage" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">S3 Хранилище</router-link>
-          <router-link to="/api-keys" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">API Ключи</router-link>
-          <router-link v-if="auth.isAdmin" to="/admin" class="px-3 py-2 rounded-lg text-sm text-emerald-400 hover:bg-slate-800">Админка</router-link>
+          <router-link to="/dashboard" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">Dashboard</router-link>
+          <router-link to="/tenants" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">K3s Tenants</router-link>
+          <router-link to="/vms" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">KVM VMs</router-link>
+          <router-link to="/databases" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">Database Hub</router-link>
+          <router-link to="/storage" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">S3 Storage</router-link>
+          <router-link to="/api-keys" class="px-3 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800">API Keys</router-link>
+          <router-link v-if="auth.isAdmin" to="/admin" class="px-3 py-2 rounded-lg text-sm text-emerald-400 hover:bg-slate-800">Admin</router-link>
         </nav>
       </div>
 
@@ -34,7 +34,7 @@ onMounted(() => {
           <span class="px-2 py-0.5 rounded text-xs bg-slate-800 border border-slate-700 text-emerald-400">{{ auth.user.role }}</span>
         </div>
         <button v-else @click="auth.loginWithGitHub" class="px-4 py-2 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition">
-          Войти
+          Sign in
         </button>
       </div>
     </div>

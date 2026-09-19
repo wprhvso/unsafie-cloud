@@ -1,6 +1,6 @@
 {
   "uid": "platform-nodes",
-  "title": "Ноды",
+  "title": "Nodes",
   "tags": [
     "platform"
   ],
@@ -17,7 +17,7 @@
     "list": [
       {
         "name": "env",
-        "label": "Окружение",
+        "label": "Environment",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -38,7 +38,7 @@
       },
       {
         "name": "instance",
-        "label": "Сервер",
+        "label": "Server",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -63,7 +63,7 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "CPU по режимам, %",
+      "title": "CPU by mode, %",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -217,7 +217,7 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Память",
+      "title": "Memory",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -235,7 +235,7 @@
             "uid": "prometheus"
           },
           "expr": "node_memory_MemTotal_bytes{env=~\"$env\",instance=~\"$instance\"} - node_memory_MemAvailable_bytes{env=~\"$env\",instance=~\"$instance\"}",
-          "legendFormat": "занято {{env}} {{instance}}",
+          "legendFormat": "used {{env}} {{instance}}",
           "refId": "T",
           "instant": false,
           "range": true
@@ -246,7 +246,7 @@
             "uid": "prometheus"
           },
           "expr": "node_memory_MemAvailable_bytes{env=~\"$env\",instance=~\"$instance\"}",
-          "legendFormat": "доступно {{env}} {{instance}}",
+          "legendFormat": "available {{env}} {{instance}}",
           "refId": "V",
           "instant": false,
           "range": true
@@ -294,7 +294,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Файловые системы, % занято",
+      "title": "Filesystems, % used",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -368,7 +368,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Сеть",
+      "title": "Network",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -445,7 +445,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Диск",
+      "title": "Disk",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

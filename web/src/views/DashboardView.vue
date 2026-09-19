@@ -38,36 +38,36 @@ onMounted(async () => {
 <template>
   <div class="space-y-8">
     <div>
-      <h1 class="text-2xl font-bold text-white">Панель управления платформой</h1>
-      <p class="text-slate-400 text-sm mt-1">Кластер из 3 серверов в Amnezia WireGuard Mesh</p>
+      <h1 class="text-2xl font-bold text-white">Platform Dashboard</h1>
+      <p class="text-slate-400 text-sm mt-1">3-Node Cluster across Amnezia WireGuard Mesh</p>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-        <span class="text-xs text-slate-400 font-medium">Ноды кластера</span>
+        <span class="text-xs text-slate-400 font-medium">Cluster Nodes</span>
         <div class="text-2xl font-bold text-emerald-400 mt-2">{{ stats.nodes_online }} / 3 Online</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-        <span class="text-xs text-slate-400 font-medium">K3s Тенанты</span>
-        <div class="text-2xl font-bold text-white mt-2">{{ stats.active_tenants }} активных</div>
+        <span class="text-xs text-slate-400 font-medium">K3s Tenants</span>
+        <div class="text-2xl font-bold text-white mt-2">{{ stats.active_tenants }} active</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-        <span class="text-xs text-slate-400 font-medium">СУБД в systemd</span>
-        <div class="text-2xl font-bold text-white mt-2">{{ stats.active_databases }} служб</div>
+        <span class="text-xs text-slate-400 font-medium">Systemd Databases</span>
+        <div class="text-2xl font-bold text-white mt-2">{{ stats.active_databases }} services</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-        <span class="text-xs text-slate-400 font-medium">Слоты Kameleo</span>
+        <span class="text-xs text-slate-400 font-medium">Kameleo Slots</span>
         <div class="text-2xl font-bold text-emerald-400 mt-2">{{ stats.active_kameleo_slots }} / {{ stats.max_kameleo_slots }}</div>
       </div>
     </div>
 
     <div>
-      <h2 class="text-lg font-semibold text-white mb-4">Мои персональные квоты</h2>
+      <h2 class="text-lg font-semibold text-white mb-4">My Personal Quotas</h2>
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <QuotaBar label="vCPU Ядра" :used="quotas.vcpus_used" :limit="quotas.vcpus_limit" unit="cores" />
-        <QuotaBar label="Оперативная память" :used="Math.round(quotas.ram_mb_used / 1024)" :limit="Math.round(quotas.ram_mb_limit / 1024)" unit="GB" />
-        <QuotaBar label="NVMe Диск" :used="quotas.disk_gb_used" :limit="quotas.disk_gb_limit" unit="GB" />
-        <QuotaBar label="Домены" :used="quotas.domains_used" :limit="quotas.domains_limit" unit="шт" />
+        <QuotaBar label="vCPU Cores" :used="quotas.vcpus_used" :limit="quotas.vcpus_limit" unit="cores" />
+        <QuotaBar label="RAM" :used="Math.round(quotas.ram_mb_used / 1024)" :limit="Math.round(quotas.ram_mb_limit / 1024)" unit="GB" />
+        <QuotaBar label="NVMe Disk" :used="quotas.disk_gb_used" :limit="quotas.disk_gb_limit" unit="GB" />
+        <QuotaBar label="Domains" :used="quotas.domains_used" :limit="quotas.domains_limit" unit="pcs" />
       </div>
     </div>
   </div>

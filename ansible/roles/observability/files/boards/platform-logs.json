@@ -1,6 +1,6 @@
 {
   "uid": "platform-logs",
-  "title": "Логи",
+  "title": "Logs",
   "tags": [
     "platform"
   ],
@@ -17,7 +17,7 @@
     "list": [
       {
         "name": "env",
-        "label": "Окружение",
+        "label": "Environment",
         "type": "query",
         "datasource": {
           "type": "loki",
@@ -39,7 +39,7 @@
       },
       {
         "name": "host",
-        "label": "Хост",
+        "label": "Host",
         "type": "query",
         "datasource": {
           "type": "loki",
@@ -61,7 +61,7 @@
       },
       {
         "name": "search",
-        "label": "Подстрока",
+        "label": "Substring",
         "type": "textbox",
         "query": "",
         "current": {
@@ -75,7 +75,7 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Строк логов в секунду",
+      "title": "Log lines per second",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -124,7 +124,7 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Ошибки в секунду",
+      "title": "Errors per second",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -189,7 +189,7 @@
     {
       "id": 3,
       "type": "logs",
-      "title": "Поток логов",
+      "title": "Log stream",
       "datasource": {
         "type": "loki",
         "uid": "loki"
