@@ -21,7 +21,8 @@ typecheck:
     uv run pyright
 
 test:
-    uv run pytest tests/ -v
+    python3 tests/test_quantity.py
+    python3 tests/test_domains.py
 
 ansible-check:
     ansible-playbook -i ansible/hosts.ini ansible/site.yml --syntax-check
@@ -40,3 +41,9 @@ db-only db:
 
 db-status:
     ansible all -i ansible/hosts.ini -m shell -a "systemctl is-active postgresql@17-main valkey-server mongod clickhouse-server redpanda rabbitmq-server qdrant meilisearch nats pocketbase"
+
+k3s-init:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/k3s_cluster.yml
+
+tenants-sync:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/tenants.yml

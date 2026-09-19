@@ -1,0 +1,11 @@
+---
+- name: sync k3s tenants
+  hosts: k3s_servers[0]
+  become: true
+  vars:
+    prune: false
+  tasks:
+    - name: apply gateway routing
+      ansible.builtin.include_role:
+        name: gateway
+        tasks_from: tenants

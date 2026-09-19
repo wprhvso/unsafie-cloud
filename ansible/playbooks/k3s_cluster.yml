@@ -1,0 +1,10 @@
+---
+- name: configure ha k3s cluster across mesh
+  hosts: k3s_servers
+  become: true
+  roles:
+    - role: k3s_server
+    - role: gateway
+      when: inventory_hostname == groups['k3s_servers'][0]
+    - role: cert_manager
+      when: inventory_hostname == groups['k3s_servers'][0]

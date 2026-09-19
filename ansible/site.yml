@@ -7,3 +7,6 @@
 
 - name: deploy native databases
   ansible.builtin.import_playbook: playbooks/databases.yml
+
+- name: setup k3s ha cluster and gateway
+  ansible.builtin.import_playbook: playbooks/k3s_cluster.yml

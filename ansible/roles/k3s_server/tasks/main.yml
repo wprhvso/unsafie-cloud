@@ -1,0 +1,55 @@
+---
+- name: download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /usr/local/bin/k3s-install.sh
+    mode: "0755"
+
+- name: initialize first k3s server
+  ansible.builtin.command:
+    cmd: >-
+      /usr/local/bin/k3s-install.sh server
+      --cluster-init
+      --flannel-iface={{ awg_iface }}
+      --node-ip={{ awg_ip }}
+      --cluster-cidr={{ k3s_cluster_cidr }}
+      --service-cidr={{ k3s_service_cidr }}
+      --disable=traefik
+      --disable=servicelb
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_TOKEN: "{{ k3s_token }}"
+  when: inventory_hostname == groups['k3s_servers'][0]
+  register: k3s_init
+  changed_when: k3s_init.rc == 0
+
+- name: join subsequent k3s servers to cluster
+  ansible.builtin.command:
+    cmd: >-
+      /usr/local/bin/k3s-install.sh server
+      --server https://{{ hostvars[groups['k3s_servers'][0]]['awg_ip'] }}:6443
+      --flannel-iface={{ awg_iface }}
+      --node-ip={{ awg_ip }}
+      --cluster-cidr={{ k3s_cluster_cidr }}
+      --service-cidr={{ k3s_service_cidr }}
+      --disable=traefik
+      --disable=servicelb
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_TOKEN: "{{ k3s_token }}"
+  when: inventory_hostname != groups['k3s_servers'][0]
+  register: k3s_join
+  changed_when: k3s_join.rc == 0
+
+- name: ensure kube config directory exists
+  ansible.builtin.file:
+    path: /root/.kube
+    state: directory
+    mode: "0700"
+
+- name: symlink k3s kubeconfig
+  ansible.builtin.file:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: /root/.kube/config
+    state: link
+    force: true
