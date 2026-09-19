@@ -1,6 +1,0 @@
----
-qdrant_version: "1.11.0"
-meilisearch_version: "1.10.0"
-nats_version: "2.10.20"
-garage_version: "1.0.1"
-pocketbase_version: "0.22.20"

@@ -1,3 +1,0 @@
----
-valkey_backup_port: 6379
-valkey_backup_retain_days: 14

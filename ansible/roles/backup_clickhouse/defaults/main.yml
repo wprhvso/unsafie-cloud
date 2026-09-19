@@ -1,5 +1,0 @@
----
-clickhouse_backup_version: "2.6.4"
-clickhouse_backup_retain_count: 14
-clickhouse_backup_http_port: 8123
-clickhouse_backup_config_path: "/etc/clickhouse-backup/config.yml"

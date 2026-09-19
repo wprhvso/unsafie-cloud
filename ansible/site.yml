@@ -1,15 +1,15 @@
 ---
-- name: setup base infrastructure
+- name: setup base host infrastructure
   ansible.builtin.import_playbook: playbooks/bootstrap.yml
 
 - name: setup encrypted network mesh
   ansible.builtin.import_playbook: playbooks/awg_mesh.yml
 
-- name: deploy native databases
-  ansible.builtin.import_playbook: playbooks/databases.yml
+- name: setup kvm hypervisors
+  ansible.builtin.import_playbook: playbooks/hypervisors.yml
 
-- name: setup k3s ha cluster and gateway
-  ansible.builtin.import_playbook: playbooks/k3s_cluster.yml
+- name: deploy control plane database
+  ansible.builtin.import_playbook: playbooks/control_plane.yml
 
 - name: setup observability pipeline
   ansible.builtin.import_playbook: playbooks/observability.yml

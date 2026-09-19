@@ -1,3 +1,0 @@
----
-qdrant_backup_port: 6333
-qdrant_backup_retain_days: 14

@@ -1,0 +1,11 @@
+.{
+    .name = .unsafie_cloud,
+    .version = "0.1.0",
+    .fingerprint = 0xdc16a806d4927a,
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

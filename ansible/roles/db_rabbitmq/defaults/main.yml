@@ -1,3 +1,0 @@
----
-rabbitmq_amqp_port: 5672
-rabbitmq_mgmt_port: 15672

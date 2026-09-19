@@ -4,41 +4,20 @@ export ANSIBLE_CONFIG := "ansible/ansible.cfg"
 default:
     @just --list
 
-sync:
-    uv sync --all-packages
+build:
+    cd zig && zig build -Doptimize=ReleaseFast
 
-lint:
-    uv run ruff check .
+run:
+    cd zig && zig build run
+
+check:
+    cd zig && zig fmt --check src/
 
 format:
-    uv run ruff format .
+    cd zig && zig fmt src/
 
-fix:
-    uv run ruff check --fix .
-    uv run ruff format .
-
-typecheck:
-    uv run pyright
-
-test:
-    python3 tests/test_quantity.py
-    python3 tests/test_domains.py
-    uv run pytest tests/test_db_schema.py tests/test_api_endpoints.py
-
-dev-api:
-    uv run --package infra-api uvicorn infra_api.main:app --reload --port 8000
-
-dev-web:
-    cd web && npm run dev
-
-build-web:
-    cd web && npm run build
-
-db-migrate:
-    uv run --package infra-db alembic upgrade head
-
-ansible-check:
-    ansible-playbook -i ansible/hosts.ini ansible/site.yml --syntax-check
+host-setup:
+    ansible-playbook -i ansible/hosts.ini ansible/site.yml
 
 awg-mesh:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/awg_mesh.yml
@@ -46,74 +25,14 @@ awg-mesh:
 bootstrap:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/bootstrap.yml
 
-db-deploy:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/databases.yml
+hypervisors:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/hypervisors.yml
 
-db-only db:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/databases.yml --tags {{ db }}
+control-plane:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/control_plane.yml
 
-db-status:
-    ansible all -i ansible/hosts.ini -m shell -a "systemctl is-active postgresql@17-main valkey-server mongod clickhouse-server redpanda rabbitmq-server qdrant meilisearch nats pocketbase"
+backups:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml
 
-k3s-init:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/k3s_cluster.yml
-
-tenants-sync:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/tenants.yml
-
-obs-deploy:
+observability:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/observability.yml
-
-backup-wal:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml
-
-backup-setup:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml --tags common
-
-backup-all:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml
-
-restore-pg host="mesh[0]" target="LATEST":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_postgres.yml -e "target_host={{ host }} target={{ target }}"
-
-restore-ch host="all" backup="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_clickhouse.yml -e "target_host={{ host }} backup_name={{ backup }}"
-
-restore-mongo host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_mongo.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-platform-db host="mesh[0]" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_platform_db.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-valkey host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_valkey.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-redpanda host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_redpanda.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-rabbitmq host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_rabbitmq.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-nats host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_nats.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-qdrant host="all" col="" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_qdrant.yml -e "target_host={{ host }} collection_name={{ col }} s3_archive_key={{ key }}"
-
-restore-meilisearch host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_meilisearch.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-pocketbase host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_pocketbase.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-restore-garage host="all" key="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_garage.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
-
-backup-db db:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml --tags {{ db }}
-
-dr-drill:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/disaster_recovery_drill.yml
-
-restore-k3s host="mesh[0]" snapshot="":
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_k3s.yml -e "target_host={{ host }} snapshot_name={{ snapshot }}"

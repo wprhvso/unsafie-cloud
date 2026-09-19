@@ -1,38 +1,6 @@
 ---
-- name: setup common backup infrastructure and runner
-  hosts: mesh
-  become: true
-  roles:
-    - backup_common
-
-- name: configure backups for postgresql and platform core database
+- name: backup postgresql core database to cloudflare r2
   hosts: mesh[0]
   become: true
   roles:
     - walg
-    - backup_platform_db
-
-- name: configure backups for analytical and document databases
-  hosts: mesh
-  become: true
-  roles:
-    - backup_clickhouse
-    - backup_mongo
-
-- name: configure backups for in-memory and messaging brokers
-  hosts: mesh
-  become: true
-  roles:
-    - backup_valkey
-    - backup_redpanda
-    - backup_rabbitmq
-    - backup_nats
-
-- name: configure backups for vector and standalone databases
-  hosts: mesh
-  become: true
-  roles:
-    - backup_qdrant
-    - backup_meilisearch
-    - backup_pocketbase
-    - backup_garage

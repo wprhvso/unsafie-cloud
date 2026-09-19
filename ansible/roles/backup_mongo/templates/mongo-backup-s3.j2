@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-set -eo pipefail
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-TMP_ARCHIVE="/tmp/mongo_${TIMESTAMP}.archive.zst"
-
-mongodump --host 127.0.0.1 --port {{ mongo_backup_port }} --oplog --archive | zstd -3 > "$TMP_ARCHIVE"
-
-/usr/local/bin/infra-s3-client upload "$TMP_ARCHIVE" "mongo/{{ inventory_hostname }}/mongo_${TIMESTAMP}.archive.zst"
-rm -f "$TMP_ARCHIVE"

@@ -1,3 +1,0 @@
----
-garage_meta_dir: "/var/lib/garage/meta"
-garage_backup_retain_days: 14

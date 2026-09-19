@@ -26,6 +26,10 @@ sysctl_params:
   net.ipv4.tcp_slow_start_after_idle: 0
   net.ipv4.tcp_mtu_probing: 1
   net.netfilter.nf_conntrack_tcp_timeout_established: 86400
+  net.core.rmem_max: 16777216
+  net.core.wmem_max: 16777216
+  net.ipv4.udp_rmem_min: 16384
+  net.ipv4.udp_wmem_min: 16384
   vm.swappiness: 10
   vm.overcommit_memory: 1
   kernel.kptr_restrict: 2
@@ -57,15 +61,3 @@ backup_log_dir: "/var/log/infra-backup"
 
 backup_prefixes:
   postgres: "postgres"
-  clickhouse: "clickhouse"
-  mongo: "mongo"
-  valkey: "valkey"
-  redpanda: "redpanda"
-  rabbitmq: "rabbitmq"
-  qdrant: "qdrant"
-  meilisearch: "meilisearch"
-  nats: "nats"
-  pocketbase: "pocketbase"
-  garage: "garage"
-  k3s: "k3s-etcd"
-  platform_db: "platform-db"

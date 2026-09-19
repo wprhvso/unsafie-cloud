@@ -1,4 +1,0 @@
----
-nats_cli_version: "0.1.5"
-nats_backup_retain_days: 14
-nats_jetstream_dir: "/var/lib/nats/jetstream"

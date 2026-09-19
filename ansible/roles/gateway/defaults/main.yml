@@ -1,4 +1,0 @@
----
-gateway_namespace: envoy-gateway-system
-gateway_class: envoy
-gateway_controller: gateway.envoyproxy.io/gatewayclass-controller
