@@ -119,3 +119,18 @@ variable "container_registry_token_expires_at" {
   type    = string
   default = "2029-01-01T00:00:00Z"
 }
+
+variable "s3_backup_retention_days" {
+  type    = number
+  default = 14
+}
+
+variable "s3_backup_cold_days" {
+  type    = number
+  default = 60
+}
+
+variable "s3_backup_archive_days" {
+  type    = number
+  default = 365
+}

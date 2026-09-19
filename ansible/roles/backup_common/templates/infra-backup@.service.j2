@@ -1,0 +1,17 @@
+[Unit]
+Description=Infrastructure Backup for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Nice=19
+IOSchedulingClass=idle
+IOSchedulingPriority=7
+MemoryHigh=1500M
+MemoryMax=2500M
+EnvironmentFile=-{{ backup_config_path }}/s3.env
+ExecStart=/usr/local/bin/infra-backup-runner %i /usr/local/bin/%i-backup-s3
+StandardOutput=journal
+StandardError=journal

@@ -66,3 +66,9 @@ obs-deploy:
 
 backup-wal:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml
+
+backup-setup:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml --tags common
+
+backup-all:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml

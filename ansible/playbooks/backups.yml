@@ -1,4 +1,10 @@
 ---
+- name: setup common backup infrastructure and runner
+  hosts: mesh
+  become: true
+  roles:
+    - backup_common
+
 - name: configure wal-g continuous archiving for postgresql
   hosts: mesh[0]
   become: true

@@ -1,0 +1,14 @@
+---
+backup_common_packages:
+  - zstd
+  - jq
+  - curl
+  - tar
+  - openssl
+  - rsync
+  - python3-pip
+
+backup_config_path: "/etc/infra-backup"
+backup_metric_path: "/var/lib/node_exporter/textfile_collector"
+backup_log_path: "/var/log/infra-backup"
+backup_lock_path: "/run/lock/infra-backup"

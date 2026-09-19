@@ -1,0 +1,51 @@
+---
+- name: install backup common prerequisites
+  ansible.builtin.apt:
+    name: "{{ backup_common_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: create backup directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { path: "{{ backup_config_path }}", mode: "0750" }
+    - { path: "{{ backup_metric_path }}", mode: "0755" }
+    - { path: "{{ backup_log_path }}", mode: "0750" }
+    - { path: "{{ backup_lock_path }}", mode: "0777" }
+
+- name: template backup environment configuration
+  ansible.builtin.template:
+    src: s3.env.j2
+    dest: "{{ backup_config_path }}/s3.env"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: install unified backup runner
+  ansible.builtin.template:
+    src: infra-backup-runner.j2
+    dest: /usr/local/bin/infra-backup-runner
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: template systemd backup units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - infra-backup@.service
+    - infra-backup@.timer
+
+- name: reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
