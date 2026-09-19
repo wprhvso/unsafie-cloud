@@ -28,6 +28,12 @@ test:
 dev-api:
     uv run --package infra-api uvicorn infra_api.main:app --reload --port 8000
 
+dev-web:
+    cd web && npm run dev
+
+build-web:
+    cd web && npm run build
+
 db-migrate:
     uv run --package infra-db alembic upgrade head
 
