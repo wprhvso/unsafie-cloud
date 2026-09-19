@@ -1,0 +1,25 @@
+name: Build Web Frontend
+
+on:
+  push:
+    branches:
+      - main
+      - feat/*
+      - chore/*
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: install dependencies
+        working-directory: web
+        run: npm ci
+      - name: build production bundle
+        working-directory: web
+        run: npm run build

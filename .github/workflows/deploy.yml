@@ -1,0 +1,28 @@
+name: Platform Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install uv
+        uses: astral-sh/setup-uv@v5
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install ansible
+        run: pip install ansible-core
+      - name: install collections
+        working-directory: ansible
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: deploy site
+        working-directory: ansible
+        env:
+          ANSIBLE_CONFIG: ansible.cfg
+        run: ansible-playbook -i hosts.ini site.yml --syntax-check

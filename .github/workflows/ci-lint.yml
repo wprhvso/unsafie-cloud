@@ -1,0 +1,54 @@
+name: Linting
+
+on:
+  push:
+    branches:
+      - main
+      - feat/*
+      - chore/*
+  pull_request:
+
+jobs:
+  python-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: sync dependencies
+        run: uv sync --all-packages
+      - name: ruff check
+        run: uv run ruff check .
+      - name: ruff format check
+        run: uv run ruff format --check .
+
+  terraform-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.6"
+      - name: terraform validate
+        working-directory: terraform
+        run: make validate
+
+  ansible-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install ansible
+        run: pip install ansible-core
+      - name: install collections
+        working-directory: ansible
+        run: ansible-galaxy collection install -r requirements.yml
+      - name: syntax check
+        working-directory: ansible
+        run: ansible-playbook -i hosts.ini site.yml --syntax-check
