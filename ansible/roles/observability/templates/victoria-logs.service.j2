@@ -1,0 +1,13 @@
+[Unit]
+Description=VictoriaLogs Log Engine
+After=network.target awg-quick@awg0.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/victoria-logs -storageDataPath=/var/lib/victoria-logs -httpListenAddr=127.0.0.1:9428,{{ awg_ip }}:9428
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

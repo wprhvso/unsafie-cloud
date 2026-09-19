@@ -1,0 +1,2 @@
+---
+vector_victorialogs_host: "{{ hostvars[groups['k3s_servers'][1] | default(groups['mesh'][1])]['awg_ip'] | default('10.42.0.2') }}"

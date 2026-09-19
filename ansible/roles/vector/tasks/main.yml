@@ -1,0 +1,46 @@
+---
+- name: add vector gpg key
+  ansible.builtin.get_url:
+    url: https://keys.datadoghq.com/DATADOG_APT_KEY_CURRENT.public
+    dest: /etc/apt/keyrings/vector.asc
+    mode: "0644"
+
+- name: add vector apt repository
+  ansible.builtin.deb822_repository:
+    name: vector
+    types: deb
+    uris: https://apt.vector.dev/
+    suites: stable
+    components: vector-0
+    signed_by: /etc/apt/keyrings/vector.asc
+    state: present
+
+- name: install vector package
+  ansible.builtin.apt:
+    name: vector
+    state: present
+    update_cache: true
+
+- name: create vector data directory
+  ansible.builtin.file:
+    path: /var/lib/vector
+    state: directory
+    owner: vector
+    group: vector
+    mode: "0750"
+
+- name: template vector configuration
+  ansible.builtin.template:
+    src: vector.yaml.j2
+    dest: /etc/vector/vector.yaml
+    owner: vector
+    group: vector
+    mode: "0644"
+    validate: /usr/bin/vector validate --no-environment --config-yaml %s
+  notify: restart vector
+
+- name: enable and start vector service
+  ansible.builtin.systemd:
+    name: vector
+    state: started
+    enabled: true

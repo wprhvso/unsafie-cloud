@@ -1,0 +1,6 @@
+---
+- name: configure wal-g continuous archiving for postgresql
+  hosts: mesh[0]
+  become: true
+  roles:
+    - walg

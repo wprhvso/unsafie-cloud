@@ -47,3 +47,9 @@ k3s-init:
 
 tenants-sync:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/tenants.yml
+
+obs-deploy:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/observability.yml
+
+backup-wal:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml
