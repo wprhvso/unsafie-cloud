@@ -46,9 +46,9 @@ base_packages:
 
 journald_max_use: 2G
 
-backup_s3_endpoint: "https://s3.ru-7.storage.selcloud.ru"
-backup_s3_region: "ru-7"
-backup_s3_bucket: "infra-backups"
+backup_s3_endpoint: "https://{{ cloudflare_account_id | default('r2-account-placeholder') }}.r2.cloudflarestorage.com"
+backup_s3_region: "auto"
+backup_s3_bucket: "infra-r2-backups"
 backup_r2_bucket: "infra-r2-backups"
 backup_retention_days: 14
 backup_config_dir: "/etc/infra-backup"

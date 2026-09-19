@@ -1,6 +1,3 @@
-selectel_username             = "service-user"
-selectel_password             = "password-here-20-chars"
-selectel_domain_name          = "123456"
 cloudflare_api_token          = "cf-api-token-here"
 cloudflare_account_id         = "cf-account-id-here"
 cloudflare_zone_id            = "cf-zone-id-here"

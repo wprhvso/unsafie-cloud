@@ -1,9 +1,6 @@
 # Terraform Module
 
-Provisions cloud resources in Selectel and Cloudflare:
-- Selectel project and service user credentials
-- Selectel Container Registry with read and full access tokens
-- Selectel S3 container for database backups
+Provisions cloud resources in Cloudflare:
 - Cloudflare R2 object storage buckets for media and backups
 - Cloudflare DNS records for root domain, subdomains and mail service
 

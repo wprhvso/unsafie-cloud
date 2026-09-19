@@ -34,7 +34,7 @@ const activeTab = ref('nodes')
       </div>
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-2">
         <div class="flex justify-between items-center">
-          <span class="font-bold text-white">Node 2 (Selectel Dedicated)</span>
+          <span class="font-bold text-white">Node 2 (Cloud Dedicated)</span>
           <span class="text-emerald-400 text-xs font-semibold">10.42.0.2</span>
         </div>
         <div class="text-xs text-slate-400">Xeon E-2388G • 64GB RAM • 2x 960GB NVMe</div>

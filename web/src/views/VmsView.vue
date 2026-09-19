@@ -70,7 +70,7 @@ onMounted(fetchVms)
             <label class="block text-slate-400 mb-1">Нода размещения</label>
             <select v-model="form.node" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white">
               <option value="node1-aeza">Node 1 (Aeza 9950X)</option>
-              <option value="node2-selectel">Node 2 (Selectel Dedicated)</option>
+              <option value="node2-cloud">Node 2 (Cloud Dedicated)</option>
               <option value="node3-office">Node 3 (Офис за NAT)</option>
             </select>
           </div>
