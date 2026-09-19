@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "infra-db"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "infra-core",
+]
+
+[tool.uv.sources]
+infra-core = { workspace = true }

@@ -1,0 +1,53 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[manifest]
+members = [
+    "infra-api",
+    "infra-core",
+    "infra-db",
+    "infrastructure",
+    "pool-client",
+]
+
+[[package]]
+name = "infra-api"
+version = "0.1.0"
+source = { editable = "services/api" }
+dependencies = [
+    { name = "infra-core" },
+    { name = "infra-db" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "infra-core", editable = "packages/infra-core" },
+    { name = "infra-db", editable = "packages/infra-db" },
+]
+
+[[package]]
+name = "infra-core"
+version = "0.1.0"
+source = { editable = "packages/infra-core" }
+
+[[package]]
+name = "infra-db"
+version = "0.1.0"
+source = { editable = "packages/infra-db" }
+dependencies = [
+    { name = "infra-core" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "infra-core", editable = "packages/infra-core" }]
+
+[[package]]
+name = "infrastructure"
+version = "0.1.0"
+source = { virtual = "." }
+
+[[package]]
+name = "pool-client"
+version = "0.1.0"
+source = { editable = "packages/pool-client" }
