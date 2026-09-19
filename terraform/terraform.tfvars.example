@@ -1,8 +1,0 @@
-cloudflare_api_token          = "cf-api-token-here"
-cloudflare_account_id         = "cf-account-id-here"
-cloudflare_zone_id            = "cf-zone-id-here"
-base_domain                   = "example.com"
-dedicated_server_ips = {
-  node1 = "185.0.0.1"
-  node2 = "95.0.0.2"
-}
