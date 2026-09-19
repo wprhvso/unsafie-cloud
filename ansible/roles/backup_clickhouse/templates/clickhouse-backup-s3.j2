@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -eo pipefail
+BACKUP_NAME="ch_$(date +%Y%m%d_%H%M%S)"
+/usr/local/bin/clickhouse-backup create "$BACKUP_NAME"
+/usr/local/bin/clickhouse-backup upload "$BACKUP_NAME"
+/usr/local/bin/clickhouse-backup delete local "$BACKUP_NAME"
+/usr/local/bin/clickhouse-backup delete remote --keep {{ clickhouse_backup_retain_count }}

@@ -1,0 +1,4 @@
+---
+platform_db_name: "infra_platform"
+platform_db_user: "postgres"
+platform_db_retain_days: 14

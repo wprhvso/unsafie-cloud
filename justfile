@@ -72,3 +72,15 @@ backup-setup:
 
 backup-all:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml
+
+restore-pg host="mesh[0]" target="LATEST":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_postgres.yml -e "target_host={{ host }} target={{ target }}"
+
+restore-ch host="all" backup="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_clickhouse.yml -e "target_host={{ host }} backup_name={{ backup }}"
+
+restore-mongo host="all" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_mongo.yml -e "target_host={{ host }} s3_archive_key={{ key }}"
+
+restore-platform-db host="mesh[0]" key="":
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/restores/restore_platform_db.yml -e "target_host={{ host }} s3_archive_key={{ key }}"

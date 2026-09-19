@@ -1,0 +1,3 @@
+---
+mongo_backup_port: 27017
+mongo_backup_retain_days: 14

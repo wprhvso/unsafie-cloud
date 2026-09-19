@@ -1,0 +1,79 @@
+---
+- name: restore postgresql from s3 via wal-g
+  hosts: "{{ target_host | default('mesh[0]') }}"
+  become: true
+  vars:
+    restore_target: "{{ target | default('LATEST') }}"
+    pg_version: "17"
+    pg_data: "/var/lib/postgresql/17/main"
+  tasks:
+    - name: stop postgresql service
+      ansible.builtin.systemd:
+        name: "postgresql@{{ pg_version }}-main"
+        state: stopped
+
+    - name: check if data directory exists
+      ansible.builtin.stat:
+        path: "{{ pg_data }}"
+      register: pg_data_stat
+
+    - name: backup existing postgresql data directory
+      ansible.builtin.command:
+        cmd: "mv {{ pg_data }} {{ pg_data }}.bak.{{ ansible_date_time.epoch }}"
+      when: pg_data_stat.stat.exists
+
+    - name: ensure data directory exists
+      ansible.builtin.file:
+        path: "{{ pg_data }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0700"
+
+    - name: fetch base backup via wal-g
+      ansible.builtin.command:
+        cmd: "/usr/local/bin/wal-g backup-fetch {{ pg_data }} {{ restore_target }}"
+      become_user: postgres
+
+    - name: create recovery signal file
+      ansible.builtin.file:
+        path: "{{ pg_data }}/recovery.signal"
+        state: touch
+        owner: postgres
+        group: postgres
+        mode: "0600"
+
+    - name: configure wal restore command in auto conf
+      ansible.builtin.blockinfile:
+        path: "{{ pg_data }}/postgresql.auto.conf"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK WAL RESTORE"
+        block: |
+          restore_command = '/usr/local/bin/wal-g wal-fetch %f %p'
+          {% if target_time is defined %}
+          recovery_target_time = '{{ target_time }}'
+          recovery_target_action = 'promote'
+          {% endif %}
+        owner: postgres
+        group: postgres
+        mode: "0600"
+
+    - name: set postgresql permissions
+      ansible.builtin.file:
+        path: "{{ pg_data }}"
+        owner: postgres
+        group: postgres
+        mode: "0700"
+        recurse: true
+
+    - name: start postgresql service
+      ansible.builtin.systemd:
+        name: "postgresql@{{ pg_version }}-main"
+        state: started
+
+    - name: wait for postgresql to become ready
+      ansible.builtin.command:
+        cmd: "/usr/lib/postgresql/{{ pg_version }}/bin/pg_isready -h 127.0.0.1 -p 5432"
+      register: ready_check
+      retries: 30
+      delay: 2
+      until: ready_check.rc == 0

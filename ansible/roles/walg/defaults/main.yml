@@ -1,6 +1,7 @@
 ---
 walg_version: "v3.0.3"
-walg_s3_prefix: "s3://infra-r2-backups/postgres-wal"
+walg_s3_prefix: "s3://infra-backups/postgres"
 walg_s3_endpoint: "https://s3.ru-7.storage.selcloud.ru"
 walg_s3_region: "ru-7"
 walg_config_path: "/etc/wal-g/wal-g.json"
+walg_retain_count: 14

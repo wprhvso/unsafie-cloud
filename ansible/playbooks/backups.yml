@@ -5,8 +5,21 @@
   roles:
     - backup_common
 
-- name: configure wal-g continuous archiving for postgresql
+- name: configure backups for postgresql and platform core database
   hosts: mesh[0]
   become: true
   roles:
     - walg
+    - backup_platform_db
+
+- name: configure backups for clickhouse
+  hosts: mesh
+  become: true
+  roles:
+    - backup_clickhouse
+
+- name: configure backups for mongodb
+  hosts: mesh
+  become: true
+  roles:
+    - backup_mongo

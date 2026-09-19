@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -eo pipefail
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+ENV_FILE="{{ backup_config_path }}/s3.env"
+[ -f "$ENV_FILE" ] && set -a && source "$ENV_FILE" && set +a
+
+TMP_ARCHIVE="/tmp/platform_db_${TIMESTAMP}.sql.zst"
+TMP_ENCRYPTED="/tmp/platform_db_${TIMESTAMP}.sql.zst.enc"
+
+pg_dump -U {{ platform_db_user }} -d {{ platform_db_name }} | zstd -3 > "$TMP_ARCHIVE"
+
+if [ -n "${BACKUP_ENCRYPTION_KEY:-}" ]; then
+    openssl enc -aes-256-gcm -pbkdf2 -pass "pass:$BACKUP_ENCRYPTION_KEY" -in "$TMP_ARCHIVE" -out "$TMP_ENCRYPTED"
+    /usr/local/bin/infra-s3-client upload "$TMP_ENCRYPTED" "platform-db/db_${TIMESTAMP}.sql.zst.enc"
+    rm -f "$TMP_ENCRYPTED"
+else
+    /usr/local/bin/infra-s3-client upload "$TMP_ARCHIVE" "platform-db/db_${TIMESTAMP}.sql.zst"
+fi
+
+rm -f "$TMP_ARCHIVE"

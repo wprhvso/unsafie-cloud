@@ -35,6 +35,14 @@
     group: root
     mode: "0755"
 
+- name: install s3 client helper
+  ansible.builtin.template:
+    src: infra-s3-client.j2
+    dest: /usr/local/bin/infra-s3-client
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: template systemd backup units
   ansible.builtin.template:
     src: "{{ item }}.j2"

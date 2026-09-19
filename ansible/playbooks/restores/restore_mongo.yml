@@ -1,0 +1,20 @@
+---
+- name: restore mongodb from s3 archive
+  hosts: "{{ target_host | default('all') }}"
+  become: true
+  vars:
+    mongo_port: 27017
+    tmp_archive: "/tmp/restore_mongo_{{ ansible_date_time.epoch }}.archive.zst"
+  tasks:
+    - name: download mongodb archive from s3
+      ansible.builtin.command:
+        cmd: "/usr/local/bin/infra-s3-client download {{ s3_archive_key }} {{ tmp_archive }}"
+
+    - name: restore mongodb archive with oplog replay
+      ansible.builtin.shell:
+        cmd: "zstd -d -c {{ tmp_archive }} | mongorestore --host 127.0.0.1 --port {{ mongo_port }} --oplogReplay --drop --archive"
+
+    - name: remove temporary archive file
+      ansible.builtin.file:
+        path: "{{ tmp_archive }}"
+        state: absent

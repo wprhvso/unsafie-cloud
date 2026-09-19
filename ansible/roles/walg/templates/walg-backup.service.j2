@@ -6,4 +6,4 @@ After=postgresql@17-main.service network-online.target
 Type=oneshot
 User=postgres
 Group=postgres
-ExecStart=/usr/local/bin/wal-g backup-push /var/lib/postgresql/17/main
+ExecStart=/bin/sh -c "/usr/local/bin/infra-backup-runner postgres /usr/local/bin/wal-g backup-push /var/lib/postgresql/17/main && /usr/local/bin/wal-g delete retain FULL {{ walg_retain_count }} --confirm"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Platform Core Database S3 Backup
+After=postgresql@17-main.service network-online.target
+
+[Service]
+Type=oneshot
+User=postgres
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/bin/infra-backup-runner platform-db /usr/local/bin/platform-db-backup-s3
+StandardOutput=journal
+StandardError=journal

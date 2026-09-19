@@ -1,0 +1,56 @@
+---
+- name: download clickhouse-backup archive
+  ansible.builtin.get_url:
+    url: "https://github.com/AlexAkulov/clickhouse-backup/releases/download/v{{ clickhouse_backup_version }}/clickhouse-backup-linux-amd64.tar.gz"
+    dest: "/tmp/clickhouse-backup-{{ clickhouse_backup_version }}.tar.gz"
+    mode: "0644"
+
+- name: extract clickhouse-backup binary
+  ansible.builtin.unarchive:
+    src: "/tmp/clickhouse-backup-{{ clickhouse_backup_version }}.tar.gz"
+    dest: /usr/local/bin
+    remote_src: true
+    creates: /usr/local/bin/clickhouse-backup
+    mode: "0755"
+
+- name: create clickhouse-backup configuration directory
+  ansible.builtin.file:
+    path: /etc/clickhouse-backup
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: template clickhouse-backup configuration
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: "{{ clickhouse_backup_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: template clickhouse backup runner script
+  ansible.builtin.template:
+    src: clickhouse-backup-s3.j2
+    dest: /usr/local/bin/clickhouse-backup-s3
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: template clickhouse backup systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - clickhouse-backup.service
+    - clickhouse-backup.timer
+
+- name: enable and start clickhouse-backup timer
+  ansible.builtin.systemd:
+    name: clickhouse-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

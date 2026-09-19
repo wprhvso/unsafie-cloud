@@ -31,6 +31,17 @@
     line: "listen_addresses = '{{ postgres_listen_addresses }}'"
   notify: restart postgresql
 
+- name: configure postgresql wal archiving
+  ansible.builtin.blockinfile:
+    path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK WAL ARCHIVE"
+    block: |
+      wal_level = replica
+      archive_mode = on
+      archive_command = '/usr/local/bin/wal-g wal-push %p'
+      archive_timeout = 300
+  notify: restart postgresql
+
 - name: allow connections from awg subnet in pg_hba
   ansible.builtin.lineinfile:
     path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
