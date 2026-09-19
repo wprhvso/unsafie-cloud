@@ -1,6 +1,6 @@
-# Private Cloud Infrastructure (`wprhvso/infrastructure`)
+# Private Cloud Infrastructure (`wprhvso/unsafie-cloud`)
 
-`wprhvso/infrastructure` is an enterprise Private Cloud and Internal Developer Platform providing automated compute, container orchestration, managed databases, and object storage across a dedicated bare-metal mesh cluster.
+`wprhvso/unsafie-cloud` is an enterprise Private Cloud and Internal Developer Platform providing automated compute, container orchestration, managed databases, and object storage across a dedicated bare-metal mesh cluster.
 
 ## Key Features
 
