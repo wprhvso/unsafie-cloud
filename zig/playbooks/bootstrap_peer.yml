@@ -1,0 +1,62 @@
+---
+- name: bootstrap autonomous peer node
+  hosts: target
+  become: true
+  tasks:
+    - name: install packages
+      ansible.builtin.apt:
+        name:
+          - ansible
+          - python3
+          - git
+          - curl
+          - tar
+          - qemu-kvm
+          - bridge-utils
+        state: present
+        update_cache: true
+
+    - name: enable ip forward
+      ansible.builtin.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        state: present
+        reload: true
+
+    - name: copy unsafie-cloud binary
+      ansible.builtin.copy:
+        src: /usr/local/bin/unsafie-cloud
+        dest: /usr/local/bin/unsafie-cloud
+        mode: "0755"
+
+    - name: ensure state directory exists
+      ansible.builtin.file:
+        path: /var/lib/unsafie/state
+        state: directory
+        mode: "0750"
+
+    - name: install systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/unsafie-cloud.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Unsafie Cloud IaaS Kernel
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/unsafie-cloud
+          Restart=always
+          RestartSec=3s
+          LimitNOFILE=65536
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: enable and start service
+      ansible.builtin.systemd:
+        name: unsafie-cloud
+        state: started
+        enabled: true
+        daemon_reload: true

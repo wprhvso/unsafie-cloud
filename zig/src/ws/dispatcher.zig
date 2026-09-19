@@ -33,6 +33,12 @@ pub const Dispatcher = struct {
         } else if (std.mem.eql(u8, action, "admin.grant_port")) {
             if (!is_admin) return error.AccessDenied;
             return admin_h.AdminHandler.handleGrantPort(allocator, params);
+        } else if (std.mem.eql(u8, action, "node.add")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleNodeAdd(allocator, params);
+        } else if (std.mem.eql(u8, action, "kernel.upgrade")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleKernelUpgrade(allocator, params);
         }
         return error.UnknownAction;
     }

@@ -28,11 +28,5 @@ bootstrap:
 hypervisors:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/hypervisors.yml
 
-control-plane:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/control_plane.yml
-
-backups:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/backups.yml
-
 observability:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/observability.yml

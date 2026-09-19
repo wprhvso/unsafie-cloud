@@ -1,7 +1,0 @@
----
-- name: deploy postgresql for unsafie cloud core
-  hosts: mesh[0]
-  become: true
-  roles:
-    - postgres
-    - walg

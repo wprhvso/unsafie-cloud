@@ -1,6 +1,0 @@
----
-- name: backup postgresql core database to cloudflare r2
-  hosts: mesh[0]
-  become: true
-  roles:
-    - walg

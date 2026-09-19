@@ -47,17 +47,10 @@ base_packages:
   - gnupg
   - lsb-release
   - rsync
+  - ansible
 
 journald_max_use: 2G
 
 backup_s3_endpoint: "https://{{ cloudflare_account_id | default('r2-account-placeholder') }}.r2.cloudflarestorage.com"
 backup_s3_region: "auto"
 backup_s3_bucket: "infra-r2-backups"
-backup_r2_bucket: "infra-r2-backups"
-backup_retention_days: 14
-backup_config_dir: "/etc/infra-backup"
-backup_textfile_dir: "/var/lib/node_exporter/textfile_collector"
-backup_log_dir: "/var/log/infra-backup"
-
-backup_prefixes:
-  postgres: "postgres"
