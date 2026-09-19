@@ -9,6 +9,12 @@ requires-python = ">=3.12"
 dependencies = [
   "infra-core",
   "infra-db",
+  "fastapi>=0.115.0",
+  "uvicorn>=0.32.0",
+  "httpx>=0.28.0",
+  "pyjwt>=2.9.0",
+  "python-multipart>=0.0.12",
+  "websockets>=14.0",
 ]
 
 [tool.uv.sources]

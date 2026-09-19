@@ -23,7 +23,10 @@ typecheck:
 test:
     python3 tests/test_quantity.py
     python3 tests/test_domains.py
-    uv run pytest tests/test_db_schema.py
+    uv run pytest tests/test_db_schema.py tests/test_api_endpoints.py
+
+dev-api:
+    uv run --package infra-api uvicorn infra_api.main:app --reload --port 8000
 
 db-migrate:
     uv run --package infra-db alembic upgrade head
