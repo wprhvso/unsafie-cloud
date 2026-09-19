@@ -1,0 +1,5 @@
+---
+- name: restart redpanda
+  ansible.builtin.systemd:
+    name: redpanda
+    state: restarted

@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudBeaver Web Client
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/cloudbeaver
+ExecStart=/opt/cloudbeaver/run-server.sh
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

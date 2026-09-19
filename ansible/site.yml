@@ -4,3 +4,6 @@
 
 - name: setup encrypted network mesh
   ansible.builtin.import_playbook: playbooks/awg_mesh.yml
+
+- name: deploy native databases
+  ansible.builtin.import_playbook: playbooks/databases.yml

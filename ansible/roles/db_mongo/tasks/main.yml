@@ -1,0 +1,39 @@
+---
+- name: download mongodb gpg key
+  ansible.builtin.get_url:
+    url: https://www.mongodb.org/static/pgp/server-7.0.asc
+    dest: /tmp/mongodb.asc
+    mode: "0644"
+
+- name: dearmor mongodb gpg key
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /etc/apt/keyrings/mongodb-server-7.0.gpg /tmp/mongodb.asc
+    creates: /etc/apt/keyrings/mongodb-server-7.0.gpg
+
+- name: add mongodb apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch=amd64,arm64 signed-by=/etc/apt/keyrings/mongodb-server-7.0.gpg]
+      https://repo.mongodb.org/apt/ubuntu
+      {{ ansible_distribution_release }}/mongodb-org/7.0 multiverse
+    state: present
+    filename: mongodb-org-7.0
+
+- name: install mongodb package
+  ansible.builtin.apt:
+    name: mongodb-org
+    state: present
+    update_cache: true
+
+- name: configure mongodb bind ip
+  ansible.builtin.lineinfile:
+    path: /etc/mongod.conf
+    regexp: "^\\s*bindIp:"
+    line: "  bindIp: {{ mongo_bind }}"
+  notify: restart mongod
+
+- name: enable and start mongod service
+  ansible.builtin.systemd:
+    name: mongod
+    state: started
+    enabled: true

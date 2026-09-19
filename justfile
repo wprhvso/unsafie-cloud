@@ -1,4 +1,5 @@
 set dotenv-load := true
+export ANSIBLE_CONFIG := "ansible/ansible.cfg"
 
 default:
     @just --list
@@ -30,3 +31,12 @@ awg-mesh:
 
 bootstrap:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/bootstrap.yml
+
+db-deploy:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/databases.yml
+
+db-only db:
+    ansible-playbook -i ansible/hosts.ini ansible/playbooks/databases.yml --tags {{ db }}
+
+db-status:
+    ansible all -i ansible/hosts.ini -m shell -a "systemctl is-active postgresql@17-main valkey-server mongod clickhouse-server redpanda rabbitmq-server qdrant meilisearch nats pocketbase"

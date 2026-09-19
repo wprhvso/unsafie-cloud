@@ -1,0 +1,49 @@
+---
+- name: install qdrant deb package
+  ansible.builtin.apt:
+    deb: "https://github.com/qdrant/qdrant/releases/download/v{{ qdrant_version }}/qdrant_{{ qdrant_version }}_amd64.deb"
+    state: present
+
+- name: install meilisearch deb package
+  ansible.builtin.apt:
+    deb: "https://github.com/meilisearch/meilisearch/releases/download/v{{ meilisearch_version }}/meilisearch-linux-amd64.deb"
+    state: present
+
+- name: install nats-server deb package
+  ansible.builtin.apt:
+    deb: "https://github.com/nats-io/nats-server/releases/download/v{{ nats_version }}/nats-server-v{{ nats_version }}-amd64.deb"
+    state: present
+
+- name: download garage binary
+  ansible.builtin.get_url:
+    url: "https://garagehq.deuxfleurs.fr/_releases/v{{ garage_version }}/x86_64-unknown-linux-musl/garage"
+    dest: /usr/local/bin/garage
+    mode: "0755"
+
+- name: download pocketbase archive and extract
+  ansible.builtin.unarchive:
+    src: "https://github.com/pocketbase/pocketbase/releases/download/v{{ pocketbase_version }}/pocketbase_{{ pocketbase_version }}_linux_amd64.zip"
+    dest: /usr/local/bin
+    remote_src: true
+    mode: "0755"
+    creates: /usr/local/bin/pocketbase
+
+- name: create pocketbase service unit
+  ansible.builtin.template:
+    src: pocketbase.service.j2
+    dest: /etc/systemd/system/pocketbase.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: enable standalone services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop:
+    - qdrant
+    - meilisearch
+    - nats
+    - pocketbase

@@ -1,0 +1,3 @@
+---
+clickhouse_http_port: 8123
+clickhouse_tcp_port: 9000

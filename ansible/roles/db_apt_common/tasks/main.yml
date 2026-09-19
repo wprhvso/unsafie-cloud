@@ -1,0 +1,19 @@
+---
+- name: ensure keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: install repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - lsb-release
+      - ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600

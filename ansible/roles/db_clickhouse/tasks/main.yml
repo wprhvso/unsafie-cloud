@@ -1,0 +1,40 @@
+---
+- name: add clickhouse gpg key
+  ansible.builtin.get_url:
+    url: https://packages.clickhouse.com/clickhouse.gpg
+    dest: /etc/apt/keyrings/clickhouse.gpg
+    mode: "0644"
+
+- name: add clickhouse apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/etc/apt/keyrings/clickhouse.gpg]
+      https://packages.clickhouse.com/deb stable main
+    state: present
+    filename: clickhouse
+
+- name: install clickhouse packages
+  ansible.builtin.apt:
+    name:
+      - clickhouse-server
+      - clickhouse-client
+      - clickhouse-keeper
+    state: present
+    update_cache: true
+
+- name: configure clickhouse listen host
+  ansible.builtin.copy:
+    dest: /etc/clickhouse-server/config.d/listen.xml
+    mode: "0644"
+    content: |
+      <clickhouse>
+          <listen_host>127.0.0.1</listen_host>
+          <listen_host>{{ awg_ip }}</listen_host>
+      </clickhouse>
+  notify: restart clickhouse
+
+- name: enable and start clickhouse service
+  ansible.builtin.systemd:
+    name: clickhouse-server
+    state: started
+    enabled: true
