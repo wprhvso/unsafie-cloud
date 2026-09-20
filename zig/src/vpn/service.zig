@@ -9,6 +9,8 @@ const telemetry = @import("mesh/telemetry.zig");
 const pathfinder = @import("mesh/pathfinder.zig");
 const relay = @import("mesh/relay.zig");
 const client_hello = @import("crypto/client_hello.zig");
+const fake_tcp = @import("transport/fake_tcp.zig");
+const silence_rst = @import("bpf/silence_rst.zig");
 
 pub const VpnService = struct {
     allocator: std.mem.Allocator,
@@ -39,6 +41,7 @@ pub const VpnService = struct {
         self.l3_router = router.Router.init(allocator, &self.learner_set, &self.rules_engine, &self.pf);
         self.tls_generator = client_hello.ChromeClientHello.init(allocator);
 
+        silence_rst.BpfSilencer.silenceViaFirewall(443);
         try self.dns_server.start(53);
         return self;
     }
