@@ -1,4 +1,7 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
+const conv = if (builtin.os.tag == .windows) std.builtin.CallingConvention.winapi else std.builtin.CallingConvention.c;
 
 pub const WINTUN_ADAPTER_HANDLE = ?*anyopaque;
 pub const WINTUN_SESSION_HANDLE = ?*anyopaque;
@@ -7,44 +10,44 @@ pub const WintunCreateAdapterFn = *const fn (
     [*:0]const u16,
     [*:0]const u16,
     ?*const anyopaque,
-) callconv(.winapi) WINTUN_ADAPTER_HANDLE;
+) callconv(conv) WINTUN_ADAPTER_HANDLE;
 
 pub const WintunOpenAdapterFn = *const fn (
     [*:0]const u16,
-) callconv(.winapi) WINTUN_ADAPTER_HANDLE;
+) callconv(conv) WINTUN_ADAPTER_HANDLE;
 
 pub const WintunCloseAdapterFn = *const fn (
     WINTUN_ADAPTER_HANDLE,
-) callconv(.winapi) void;
+) callconv(conv) void;
 
 pub const WintunStartSessionFn = *const fn (
     WINTUN_ADAPTER_HANDLE,
     u32,
-) callconv(.winapi) WINTUN_SESSION_HANDLE;
+) callconv(conv) WINTUN_SESSION_HANDLE;
 
 pub const WintunEndSessionFn = *const fn (
     WINTUN_SESSION_HANDLE,
-) callconv(.winapi) void;
+) callconv(conv) void;
 
 pub const WintunReceivePacketFn = *const fn (
     WINTUN_SESSION_HANDLE,
     *u32,
-) callconv(.winapi) ?[*]u8;
+) callconv(conv) ?[*]u8;
 
 pub const WintunReleaseReceivePacketFn = *const fn (
     WINTUN_SESSION_HANDLE,
     [*]const u8,
-) callconv(.winapi) void;
+) callconv(conv) void;
 
 pub const WintunAllocateSendPacketFn = *const fn (
     WINTUN_SESSION_HANDLE,
     u32,
-) callconv(.winapi) ?[*]u8;
+) callconv(conv) ?[*]u8;
 
 pub const WintunSendPacketFn = *const fn (
     WINTUN_SESSION_HANDLE,
     [*]const u8,
-) callconv(.winapi) void;
+) callconv(conv) void;
 
 pub const WintunDevice = struct {
     adapter: WINTUN_ADAPTER_HANDLE = null,
@@ -65,6 +68,8 @@ pub const WintunDevice = struct {
         _ = allocator;
         _ = adapter_name;
         var dev = WintunDevice{};
+        if (builtin.os.tag != .windows) return dev;
+
         dev.lib = std.DynLib.open("wintun.dll") catch return dev;
 
         if (dev.lib) |*lib| {
