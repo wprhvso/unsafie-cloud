@@ -8,6 +8,7 @@ const router = @import("router.zig");
 const telemetry = @import("mesh/telemetry.zig");
 const pathfinder = @import("mesh/pathfinder.zig");
 const relay = @import("mesh/relay.zig");
+const client_hello = @import("crypto/client_hello.zig");
 
 pub const VpnService = struct {
     allocator: std.mem.Allocator,
@@ -20,6 +21,7 @@ pub const VpnService = struct {
     pf: pathfinder.Pathfinder,
     blind_relay: relay.BlindRelay,
     l3_router: router.Router,
+    tls_generator: client_hello.ChromeClientHello,
 
     pub fn init(allocator: std.mem.Allocator, ifname: []const u8, subnet: []const u8) !*VpnService {
         const self = try allocator.create(VpnService);
@@ -35,6 +37,7 @@ pub const VpnService = struct {
         self.pf = pathfinder.Pathfinder.init(allocator, &self.telem);
         self.blind_relay = relay.BlindRelay.init(allocator);
         self.l3_router = router.Router.init(allocator, &self.learner_set, &self.rules_engine, &self.pf);
+        self.tls_generator = client_hello.ChromeClientHello.init(allocator);
 
         try self.dns_server.start(53);
         return self;
