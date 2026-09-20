@@ -25,11 +25,11 @@ pub const Config = struct {
 
         const http_port_str = env_map.get("HTTP_PORT") orelse "80";
         const https_port_str = env_map.get("HTTPS_PORT") orelse "443";
-        const rpc_port_str = env_map.get("RPC_PORT") orelse "8000";
+        const rpc_port_str = env_map.get("RPC_PORT") orelse "443";
 
         const http_port = std.fmt.parseInt(u16, http_port_str, 10) catch 80;
         const https_port = std.fmt.parseInt(u16, https_port_str, 10) catch 443;
-        const rpc_port = std.fmt.parseInt(u16, rpc_port_str, 10) catch 8000;
+        const rpc_port = std.fmt.parseInt(u16, rpc_port_str, 10) catch 443;
 
         const vpn_iface = try allocator.dupe(u8, env_map.get("VPN_IFACE") orelse "unsafie0");
         const vpn_subnet = try allocator.dupe(u8, env_map.get("VPN_SUBNET") orelse "10.42.0.0/16");

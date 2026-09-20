@@ -34,7 +34,7 @@ class Client:
         endpoint: str | None = None,
         api_key: str | None = None,
     ):
-        self.endpoint = (endpoint or os.environ.get("UNSAFIE_ENDPOINT") or "https://127.0.0.1:8000").rstrip("/")
+        self.endpoint = (endpoint or os.environ.get("UNSAFIE_ENDPOINT") or "https://127.0.0.1:443").rstrip("/")
         self.api_key = api_key or os.environ.get("UNSAFIE_API_KEY") or os.environ.get("UNSAFIE_ADMIN_TOKEN") or ""
 
         self.vm = VmManager(self)

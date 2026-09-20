@@ -8,7 +8,7 @@ pub const Config = struct {
         var env_map = try std.process.getEnvMap(allocator);
         defer env_map.deinit();
 
-        const ep = env_map.get("UNSAFIE_ENDPOINT") orelse "https://127.0.0.1:8000";
+        const ep = env_map.get("UNSAFIE_ENDPOINT") orelse "https://127.0.0.1:443";
         const key = env_map.get("UNSAFIE_API_KEY") orelse env_map.get("UNSAFIE_ADMIN_TOKEN") orelse "";
 
         return .{
