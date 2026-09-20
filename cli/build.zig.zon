@@ -1,0 +1,11 @@
+.{
+    .name = .unsafie_cli,
+    .version = "0.1.0",
+    .fingerprint = 0x4c256c0133e1de5f,
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

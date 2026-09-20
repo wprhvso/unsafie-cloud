@@ -1,6 +1,0 @@
----
-- name: restart awg
-  ansible.builtin.systemd:
-    name: "awg-quick@{{ awg_iface }}"
-    state: restarted
-    daemon_reload: true

@@ -2,9 +2,6 @@
 - name: setup base host infrastructure
   ansible.builtin.import_playbook: playbooks/bootstrap.yml
 
-- name: setup encrypted network mesh
-  ansible.builtin.import_playbook: playbooks/awg_mesh.yml
-
 - name: setup kvm hypervisors
   ansible.builtin.import_playbook: playbooks/hypervisors.yml
 

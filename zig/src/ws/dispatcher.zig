@@ -33,9 +33,27 @@ pub const Dispatcher = struct {
         } else if (std.mem.eql(u8, action, "admin.grant_port")) {
             if (!is_admin) return error.AccessDenied;
             return admin_h.AdminHandler.handleGrantPort(allocator, params);
-        } else if (std.mem.eql(u8, action, "node.add")) {
+        } else if (std.mem.eql(u8, action, "node.add") or std.mem.eql(u8, action, "node.ensure")) {
             if (!is_admin) return error.AccessDenied;
-            return admin_h.AdminHandler.handleNodeAdd(allocator, params);
+            return admin_h.AdminHandler.handleNodeEnsure(allocator, params);
+        } else if (std.mem.eql(u8, action, "node.list")) {
+            return admin_h.AdminHandler.handleNodeList(allocator);
+        } else if (std.mem.eql(u8, action, "node.delete")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleNodeDelete(allocator, params);
+        } else if (std.mem.eql(u8, action, "node.bake")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleNodeBake(allocator, params);
+        } else if (std.mem.eql(u8, action, "vpn.ensure")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleVpnEnsure(allocator, params);
+        } else if (std.mem.eql(u8, action, "vpn.status")) {
+            return admin_h.AdminHandler.handleVpnStatus(allocator);
+        } else if (std.mem.eql(u8, action, "route.ensure")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleRouteEnsure(allocator, params);
+        } else if (std.mem.eql(u8, action, "mesh.topology")) {
+            return admin_h.AdminHandler.handleMeshTopology(allocator);
         } else if (std.mem.eql(u8, action, "kernel.upgrade")) {
             if (!is_admin) return error.AccessDenied;
             return admin_h.AdminHandler.handleKernelUpgrade(allocator, params);

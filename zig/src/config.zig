@@ -9,6 +9,9 @@ pub const Config = struct {
     http_port: u16,
     https_port: u16,
     rpc_port: u16,
+    vpn_iface: []const u8,
+    vpn_subnet: []const u8,
+    internal_domain: []const u8,
 
     pub fn load(allocator: std.mem.Allocator) !Config {
         var env_map = try std.process.getEnvMap(allocator);
@@ -28,6 +31,10 @@ pub const Config = struct {
         const https_port = std.fmt.parseInt(u16, https_port_str, 10) catch 443;
         const rpc_port = std.fmt.parseInt(u16, rpc_port_str, 10) catch 8000;
 
+        const vpn_iface = try allocator.dupe(u8, env_map.get("VPN_IFACE") orelse "unsafie0");
+        const vpn_subnet = try allocator.dupe(u8, env_map.get("VPN_SUBNET") orelse "10.42.0.0/16");
+        const internal_domain = try allocator.dupe(u8, env_map.get("INTERNAL_DOMAIN") orelse "internal");
+
         return .{
             .admin_token = admin_token,
             .state_dir = state_dir,
@@ -37,6 +44,9 @@ pub const Config = struct {
             .http_port = http_port,
             .https_port = https_port,
             .rpc_port = rpc_port,
+            .vpn_iface = vpn_iface,
+            .vpn_subnet = vpn_subnet,
+            .internal_domain = internal_domain,
         };
     }
 
@@ -46,5 +56,8 @@ pub const Config = struct {
         allocator.free(self.storage_dir);
         allocator.free(self.r2_endpoint);
         allocator.free(self.r2_bucket);
+        allocator.free(self.vpn_iface);
+        allocator.free(self.vpn_subnet);
+        allocator.free(self.internal_domain);
     }
 };

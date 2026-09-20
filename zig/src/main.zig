@@ -6,6 +6,7 @@ const disk_storage = @import("storage/disk.zig");
 const edge = @import("edge/server.zig");
 const ws = @import("ws/server.zig");
 const watchdog = @import("cluster/watchdog.zig");
+const vpn = @import("vpn/service.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -23,6 +24,9 @@ pub fn main() !void {
 
     const runner = ansible_runner.AnsibleRunner.init(allocator);
     _ = runner;
+
+    var vpn_service = try vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet);
+    defer vpn_service.deinit();
 
     const edge_server = edge.EdgeServer.init(cfg.http_port, cfg.https_port);
     try edge_server.start();

@@ -54,5 +54,29 @@ pub const KernelManifest = struct {
     version: []const u8,
     sha256: []const u8,
     download_url: []const u8,
+    signature_ed25519: []const u8 = "",
     active_slot: []const u8 = "slot_a",
+};
+
+pub const NodeCapabilities = struct {
+    gitops_store: bool = true,
+    compute_kvm: bool = false,
+    ingress_443: bool = false,
+};
+
+pub const NodeManifest = struct {
+    name: []const u8,
+    role: []const u8 = "workstation",
+    ip_address: []const u8,
+    internal_domain: []const u8,
+    public_key: []const u8 = "",
+    capabilities: NodeCapabilities = .{},
+    listen_port: ?u16 = null,
+    created_at: i64 = 0,
+};
+
+pub const RouteManifest = struct {
+    prefix: []const u8,
+    next_hop: []const u8,
+    metric: u32 = 100,
 };

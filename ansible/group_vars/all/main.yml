@@ -1,19 +1,7 @@
 ---
-awg_iface: awg0
-awg_subnet: 10.42.0.0/24
-awg_port: 39847
-awg_mtu: 1420
-
-awg_obfuscation:
-  jc: 4
-  jmin: 40
-  jmax: 70
-  s1: 68
-  s2: 149
-  h1: 1374849302
-  h2: 2148573910
-  h3: 3092847561
-  h4: 4183726094
+vpn_iface: unsafie0
+vpn_subnet: 10.42.0.0/16
+internal_domain: internal
 
 sysctl_params:
   net.core.default_qdisc: fq

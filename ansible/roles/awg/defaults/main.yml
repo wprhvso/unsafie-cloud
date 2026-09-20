@@ -1,5 +1,0 @@
----
-awg_iface: awg0
-awg_subnet: 10.42.0.0/24
-awg_port: 39847
-awg_mtu: 1420
