@@ -7,6 +7,17 @@ pub const R2Client = struct {
     access_key: []const u8,
     secret_key: []const u8,
 
+    pub fn ensureBucket(self: R2Client, bucket_name: []const u8) !void {
+        _ = self;
+        _ = bucket_name;
+    }
+
+    pub fn setBucketLifecycle(self: R2Client, bucket_name: []const u8, retention_days: u32) !void {
+        _ = self;
+        _ = bucket_name;
+        _ = retention_days;
+    }
+
     pub fn uploadFile(self: R2Client, key: []const u8, data: []const u8) !void {
         _ = self;
         _ = key;
@@ -17,5 +28,15 @@ pub const R2Client = struct {
         _ = self;
         _ = key;
         _ = dest_path;
+    }
+
+    pub fn deleteFile(self: R2Client, key: []const u8) !void {
+        _ = self;
+        _ = key;
+    }
+
+    pub fn listObjects(self: R2Client, prefix: []const u8) !void {
+        _ = self;
+        _ = prefix;
     }
 };

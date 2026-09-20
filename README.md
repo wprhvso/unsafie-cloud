@@ -31,6 +31,7 @@ pip install ./sdk
 - **Unified Port 443:** Authentic web server serving HTTPS content while multiplexing MASQUE CONNECT-UDP (HTTP/3) and RFC 8441 WebSockets (HTTP/2) for authenticated VPN peers.
 - **Split-DNS (`*.internal`):** Built-in DNS resolver on `10.42.0.1:53` mapping `node*.internal` and `vm-*.internal` instances.
 - **Incus KVM Hypervisor:** Hardware virtualization controlled directly via `/var/lib/incus/unix.socket` with ISO-first boot and QCOW2 baking to Cloudflare R2.
+- **Native Cloudflare R2 Management:** Zig kernel directly manages Cloudflare R2 buckets, lifecycle rules, image caching, and disaster recovery backups without external Terraform.
 - **Everywhere GitOps:** Mandatory local Git store on every node (`state/git.zig`) with P2P replication over binary RPC streams.
 - **Zero-Config Client Baking:** Pre-configured standalone binaries (`unsafie bake --target exe/apk`) with embedded profile overlays for one-click connectivity.
 - **Dual-Slot A/B Auto-Upgrade:** Self-updating nodes with Ed25519 signature verification and zero-downtime socket handover.
@@ -42,7 +43,6 @@ pip install ./sdk
 - `sdk/`: Asynchronous Python client library (`unsafie_cloud`).
 - `scripts/`: Fast installation scripts for Linux, macOS, and Windows.
 - `ansible/`: Base host provisioning and observability automation.
-- `terraform/`: Optional cloud DNS and infrastructure bootstrapping.
 
 ## Building from Source
 
