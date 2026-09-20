@@ -43,10 +43,10 @@ pub const ChromeClientHello = struct {
 
         const standard_ciphers = [_]u16{
             0x1301, 0x1302, 0x1303,
-            0xc02b, 0xc02f, 0xc02c, 0xc030,
-            0xcca9, 0xcca8,
-            0x009c, 0x009d,
-            0x002f, 0x0035, 0x000a,
+            0xc02b, 0xc02f, 0xc02c,
+            0xc030, 0xcca9, 0xcca8,
+            0x009c, 0x009d, 0x002f,
+            0x0035, 0x000a,
         };
 
         const cipher_suites_len: u16 = (1 + standard_ciphers.len) * 2;

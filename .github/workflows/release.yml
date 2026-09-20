@@ -6,75 +6,26 @@ on:
       - 'v*'
 
 jobs:
-  build:
-    name: build-${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-linux-musl
-            output_name: unsafie-linux-x86_64
-          - os: ubuntu-latest
-            target: aarch64-linux-musl
-            output_name: unsafie-linux-aarch64
-          - os: ubuntu-latest
-            target: x86_64-windows
-            output_name: unsafie-windows-x86_64.exe
-          - os: macos-latest
-            target: aarch64-macos
-            output_name: unsafie-macos-aarch64
-          - os: macos-latest
-            target: x86_64-macos
-            output_name: unsafie-macos-x86_64
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
-        with:
-          version: 0.15.1
-
-      - name: Build Core
-        run: |
-          cd zig
-          zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target }}
-
-      - name: Build CLI
-        run: |
-          cd cli
-          zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target }}
-
-      - name: Package Artifact
-        run: |
-          mkdir -p dist
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            cp zig/zig-out/bin/unsafie-cloud.exe dist/${{ matrix.output_name }}
-          else
-            cp zig/zig-out/bin/unsafie-cloud dist/${{ matrix.output_name }}
-            tar -czf dist/${{ matrix.output_name }}.tar.gz -C dist ${{ matrix.output_name }}
-          fi
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.output_name }}
-          path: dist/*
-
-  publish:
-    needs: build
+  pipeline:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: mlugg/setup-zig@v1
         with:
-          path: release-artifacts
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+          version: 0.15.1
+      - uses: extractions/setup-just@v2
+      - uses: actions/setup-python@v5
         with:
-          files: release-artifacts/**/*
+          python-version: '3.12'
+      - run: just ci-build-all
+      - run: just ci-android
+      - run: just cd-package
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.apk
+            dist/packages/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
