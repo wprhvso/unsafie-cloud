@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 pub const SystemdWatchdog = struct {
     pub fn notifyReady() void {
@@ -10,6 +11,7 @@ pub const SystemdWatchdog = struct {
     }
 
     fn sendNotify(state: []const u8) !void {
+        if (builtin.os.tag == .windows) return;
         const notify_socket = std.posix.getenv("NOTIFY_SOCKET") orelse return;
         const stream = try std.net.connectUnixSocket(notify_socket);
         defer stream.close();
