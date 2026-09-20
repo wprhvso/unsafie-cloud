@@ -13,6 +13,8 @@ const fake_tcp = @import("transport/fake_tcp.zig");
 const silence_rst = @import("bpf/silence_rst.zig");
 const p2p = @import("mesh/p2p.zig");
 const stun = @import("mesh/stun.zig");
+const timing_wheel = @import("pacing/timing_wheel.zig");
+const bbr = @import("pacing/bbr.zig");
 
 pub const VpnService = struct {
     allocator: std.mem.Allocator,
@@ -27,6 +29,8 @@ pub const VpnService = struct {
     l3_router: router.Router,
     tls_generator: client_hello.ChromeClientHello,
     p2p_coordinator: p2p.HolePunchCoordinator,
+    tw: timing_wheel.TimingWheel,
+    bbr_engine: bbr.BbrController,
 
     pub fn init(allocator: std.mem.Allocator, ifname: []const u8, subnet: []const u8) !*VpnService {
         const self = try allocator.create(VpnService);
@@ -44,6 +48,8 @@ pub const VpnService = struct {
         self.l3_router = router.Router.init(allocator, &self.learner_set, &self.rules_engine, &self.pf);
         self.tls_generator = client_hello.ChromeClientHello.init(allocator);
         self.p2p_coordinator = p2p.HolePunchCoordinator.init(allocator);
+        self.tw = timing_wheel.TimingWheel.init(allocator);
+        self.bbr_engine = bbr.BbrController.init();
 
         silence_rst.BpfSilencer.silenceViaFirewall(443);
         try self.dns_server.start(53);
@@ -57,6 +63,7 @@ pub const VpnService = struct {
         self.telem.deinit();
         self.pf.deinit();
         self.p2p_coordinator.deinit();
+        self.tw.deinit();
         self.allocator.destroy(self);
     }
 };
