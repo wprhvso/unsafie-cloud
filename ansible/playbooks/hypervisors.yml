@@ -1,6 +1,0 @@
----
-- name: setup kvm hypervisors and virtual networking
-  hosts: mesh
-  become: true
-  roles:
-    - hypervisor

@@ -1,6 +1,0 @@
----
-- name: execute tasks on target virtual machine
-  hosts: target
-  become: true
-  tasks: "{{ user_tasks | default([]) }}"
-  handlers: "{{ user_handlers | default([]) }}"

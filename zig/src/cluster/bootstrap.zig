@@ -1,14 +1,23 @@
 const std = @import("std");
-const runner = @import("../ansible/runner.zig");
+const host = @import("../host/provisioner.zig");
 
 pub const Bootstrapper = struct {
-    ansible_runner: runner.AnsibleRunner,
+    allocator: std.mem.Allocator,
 
-    pub fn init(ansible_runner: runner.AnsibleRunner) Bootstrapper {
-        return .{ .ansible_runner = ansible_runner };
+    pub fn init(allocator: std.mem.Allocator) Bootstrapper {
+        return .{ .allocator = allocator };
+    }
+
+    pub fn bootstrapLocal(self: Bootstrapper, vpn_iface: []const u8) !void {
+        const prov = host.HostProvisioner.init(self.allocator);
+        try prov.bootstrapAll(vpn_iface);
     }
 
     pub fn bootstrapNode(self: Bootstrapper, target_ip: []const u8, extra_vars: ?[]const u8) !void {
-        try self.ansible_runner.runPlaybook(target_ip, "bootstrap_peer.yml", extra_vars);
+        _ = extra_vars;
+        var child = std.process.Child.init(&[_][]const u8{
+            "ssh", "-o", "StrictHostKeyChecking=no", target_ip, "unsafie", "host", "bootstrap",
+        }, self.allocator);
+        _ = child.spawnAndWait() catch {};
     }
 };

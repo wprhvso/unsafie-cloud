@@ -1,6 +1,0 @@
----
-- name: setup base host infrastructure
-  ansible.builtin.import_playbook: playbooks/bootstrap.yml
-
-- name: setup kvm hypervisors
-  ansible.builtin.import_playbook: playbooks/hypervisors.yml

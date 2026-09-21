@@ -1,8 +1,0 @@
----
-- name: bootstrap base operating system and security
-  hosts: all
-  become: true
-  roles:
-    - base
-    - sysctl
-    - security

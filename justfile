@@ -1,5 +1,4 @@
 set dotenv-load := true
-export ANSIBLE_CONFIG := "ansible/ansible.cfg"
 
 default:
     @just --list
@@ -20,14 +19,10 @@ format:
     cd cli && zig fmt src/
 
 host-setup:
-    ansible-playbook -i ansible/hosts.ini ansible/site.yml
+    cd cli && ./zig-out/bin/unsafie host bootstrap
 
 bootstrap:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/bootstrap.yml
-
-hypervisors:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/hypervisors.yml
-
+    cd cli && ./zig-out/bin/unsafie host bootstrap
 
 ci-check:
     cd zig && zig fmt --check src/
@@ -82,7 +77,7 @@ cd-package:
     tar -czf dist/unsafie-linux-aarch64.tar.gz -C dist/bin unsafie-aarch64-linux unsafie-cloud-aarch64-linux
     zip -j dist/unsafie-windows-x86_64.zip dist/bin/unsafie-x86_64.exe dist/bin/unsafie-cloud-x86_64.exe
     tar -czf dist/unsafie-macos-aarch64.tar.gz -C dist/bin unsafie-aarch64-macos unsafie-cloud-aarch64-macos
-    tar -czf dist/unsafie-macos-x86_64.tar.gz -C dist/bin unsafie-x86_64-macos unsafie-cloud-x86_64-macos
+    tar -czf dist/unsafie-macos-x86_64.tar.gz -C dist/bin unsafie-x86_64-macos unsafie-cloud-aarch64-macos
     bash -c 'if command -v python3 >/dev/null 2>&1; then python3 -m pip install build --quiet 2>/dev/null || true; python3 -m build sdk/ -o dist/packages/ 2>/dev/null || true; fi'
 
 cd-release:

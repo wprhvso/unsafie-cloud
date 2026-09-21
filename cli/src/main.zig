@@ -17,6 +17,7 @@ const cmd_completion = @import("commands/completion.zig");
 const cmd_logs = @import("commands/logs.zig");
 const cmd_events = @import("commands/events.zig");
 const cmd_fleet = @import("commands/fleet.zig");
+const cmd_host = @import("commands/host.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -45,6 +46,7 @@ pub fn main() !void {
             \\  quota        User resource quotas and whitelist grants (get, set, grant)
             \\  kernel       Zero-downtime A/B kernel rollout (status, upgrade)
             \\  fleet        Ephemeral exit node fleet and GitHub token pool (status, add, dispatch)
+            \\  host         Idempotent host provisioning and sysctl/firewall setup (bootstrap, setup)
             \\  events       Immutable event ledger stream (list, tail, audit)
             \\  logs         Cluster-wide JSONL structured logs (tail, filter)
             \\  top          Interactive live terminal TUI dashboard
@@ -88,6 +90,8 @@ pub fn main() !void {
         try cmd_kernel.execute(cl, subargs.items);
     } else if (std.mem.eql(u8, cmd, "fleet")) {
         try cmd_fleet.execute(cl, subargs.items);
+    } else if (std.mem.eql(u8, cmd, "host")) {
+        try cmd_host.execute(cl, subargs.items);
     } else if (std.mem.eql(u8, cmd, "events")) {
         try cmd_events.execute(cl, subargs.items);
     } else if (std.mem.eql(u8, cmd, "logs")) {
