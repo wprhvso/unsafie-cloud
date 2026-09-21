@@ -13,9 +13,10 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    exe.addIncludePath(b.path("c"));
+    const sqlite_dep = b.dependency("sqlite", .{});
+    exe.addIncludePath(sqlite_dep.path("."));
     exe.addCSourceFile(.{
-        .file = b.path("c/sqlite3.c"),
+        .file = sqlite_dep.path("sqlite3.c"),
         .flags = &[_][]const u8{
             "-DSQLITE_ENABLE_FTS5",
             "-DSQLITE_ENABLE_RTREE",

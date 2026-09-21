@@ -2,7 +2,12 @@
     .name = .unsafie_cloud,
     .version = "0.1.0",
     .fingerprint = 0xdc16a806d4927a,
-    .dependencies = .{},
+    .dependencies = .{
+        .sqlite = .{
+            .url = "https://www.sqlite.org/2024/sqlite-amalgamation-3470200.zip",
+            .hash = "N-V-__8AAG_DpgBRxdZhviC5R5e1bXx3wBqXAIXD_dLa9a87",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",
