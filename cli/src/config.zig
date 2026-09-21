@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const baked_bootstrap_node = "node1.unsafie.com:443";
+
 pub const Config = struct {
     endpoint: []const u8,
     api_key: []const u8,
@@ -8,7 +10,7 @@ pub const Config = struct {
         var env_map = try std.process.getEnvMap(allocator);
         defer env_map.deinit();
 
-        const ep = env_map.get("UNSAFIE_ENDPOINT") orelse "https://127.0.0.1:443";
+        const ep = env_map.get("UNSAFIE_ENDPOINT") orelse "https://node1.unsafie.com:443";
         const key = env_map.get("UNSAFIE_API_KEY") orelse env_map.get("UNSAFIE_ADMIN_TOKEN") orelse "";
 
         return .{

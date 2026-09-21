@@ -1,5 +1,9 @@
 const std = @import("std");
 
+pub const baked_bootstrap_peers = [_][]const u8{
+    "node1.unsafie.com:443",
+};
+
 pub const Config = struct {
     admin_token: []const u8,
     state_dir: []const u8,
@@ -12,6 +16,7 @@ pub const Config = struct {
     vpn_iface: []const u8,
     vpn_subnet: []const u8,
     internal_domain: []const u8,
+    bootstrap_peers: []const []const u8,
 
     pub fn load(allocator: std.mem.Allocator) !Config {
         var env_map = try std.process.getEnvMap(allocator);
@@ -35,6 +40,11 @@ pub const Config = struct {
         const vpn_subnet = try allocator.dupe(u8, env_map.get("VPN_SUBNET") orelse "10.42.0.0/16");
         const internal_domain = try allocator.dupe(u8, env_map.get("INTERNAL_DOMAIN") orelse "internal");
 
+        var peers = try allocator.alloc([]const u8, baked_bootstrap_peers.len);
+        for (baked_bootstrap_peers, 0..) |peer, i| {
+            peers[i] = try allocator.dupe(u8, peer);
+        }
+
         return .{
             .admin_token = admin_token,
             .state_dir = state_dir,
@@ -47,6 +57,7 @@ pub const Config = struct {
             .vpn_iface = vpn_iface,
             .vpn_subnet = vpn_subnet,
             .internal_domain = internal_domain,
+            .bootstrap_peers = peers,
         };
     }
 
@@ -59,5 +70,9 @@ pub const Config = struct {
         allocator.free(self.vpn_iface);
         allocator.free(self.vpn_subnet);
         allocator.free(self.internal_domain);
+        for (self.bootstrap_peers) |peer| {
+            allocator.free(peer);
+        }
+        allocator.free(self.bootstrap_peers);
     }
 };

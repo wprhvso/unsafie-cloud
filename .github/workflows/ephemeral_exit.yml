@@ -1,0 +1,23 @@
+name: ephemeral-exit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'
+
+jobs:
+  run-exit-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - name: Install Unsafie Node
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/wprhvso/unsafie-cloud/main/scripts/install.sh | bash
+
+      - name: Run Ephemeral Exit Node
+        run: |
+          sudo unsafie node join \
+            --token "${{ secrets.UNSAFIE_JOIN_TOKEN }}" \
+            --role ephemeral-exit \
+            --ephemeral \
+            --lifetime 320m || true

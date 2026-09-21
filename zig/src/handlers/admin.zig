@@ -91,4 +91,20 @@ pub const AdminHandler = struct {
         _ = allocator;
         return std.json.Value{ .string = "ledger_healthy" };
     }
+
+    pub fn handleFleetAccountAdd(allocator: std.mem.Allocator, params: ?std.json.Value) !std.json.Value {
+        _ = allocator;
+        _ = params;
+        return std.json.Value{ .string = "fleet_account_added" };
+    }
+
+    pub fn handleFleetStatus(allocator: std.mem.Allocator) !std.json.Value {
+        _ = allocator;
+        return std.json.Value{ .string = "fleet_ready" };
+    }
+
+    pub fn handleFleetDispatch(allocator: std.mem.Allocator) !std.json.Value {
+        _ = allocator;
+        return std.json.Value{ .string = "runner_dispatched" };
+    }
 };

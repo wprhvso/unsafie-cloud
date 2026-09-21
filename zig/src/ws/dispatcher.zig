@@ -58,6 +58,14 @@ pub const Dispatcher = struct {
             return admin_h.AdminHandler.handleLogsGet(allocator, params);
         } else if (std.mem.eql(u8, action, "events.status") or std.mem.eql(u8, action, "events.list")) {
             return admin_h.AdminHandler.handleEventsStatus(allocator);
+        } else if (std.mem.eql(u8, action, "fleet.account_add")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleFleetAccountAdd(allocator, params);
+        } else if (std.mem.eql(u8, action, "fleet.status")) {
+            return admin_h.AdminHandler.handleFleetStatus(allocator);
+        } else if (std.mem.eql(u8, action, "fleet.dispatch")) {
+            if (!is_admin) return error.AccessDenied;
+            return admin_h.AdminHandler.handleFleetDispatch(allocator);
         } else if (std.mem.eql(u8, action, "kernel.upgrade")) {
             if (!is_admin) return error.AccessDenied;
             return admin_h.AdminHandler.handleKernelUpgrade(allocator, params);
