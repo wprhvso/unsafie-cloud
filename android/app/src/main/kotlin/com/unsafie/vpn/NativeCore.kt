@@ -15,4 +15,6 @@ object NativeCore {
   external fun isRunning(): Boolean
 
   external fun getVpnIp(): String
+
+  external fun protectSocket(socketFd: Int): Int
 }

@@ -5,7 +5,7 @@ const spinner = @import("../ui/spinner.zig").Spinner;
 pub fn execute(c: client.Client, args: []const []const u8) !void {
     _ = c;
     if (args.len < 1) {
-        std.debug.print("Usage: unsafie kernel <status|upgrade>\n", .{});
+        std.debug.print("Usage: unsafie-cloud kernel <status|upgrade>\n", .{});
         return;
     }
     const sub = args[0];

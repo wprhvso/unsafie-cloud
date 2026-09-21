@@ -53,5 +53,10 @@ pub const BpfSilencer = struct {
             "iptables", "-I", "OUTPUT", "-p", "tcp", "--tcp-flags", "RST", "RST", "--sport", port_str, "-j", "DROP",
         }, std.heap.page_allocator);
         _ = child.spawnAndWait() catch {};
+
+        if (std.fs.openFileAbsolute("/proc/sys/net/ipv4/tcp_fin_timeout", .{ .mode = .write_only })) |f| {
+            defer f.close();
+            f.writeAll("15\n") catch {};
+        } else |_| {}
     }
 };

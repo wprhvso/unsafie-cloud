@@ -49,6 +49,24 @@ pub const WintunSendPacketFn = *const fn (
     [*]const u8,
 ) callconv(conv) void;
 
+pub const MIB_UNICASTIPADDRESS_ROW = extern struct {
+    Address: extern struct {
+        si_family: u16 = 2,
+        sin_port: u16 = 0,
+        sin_addr: u32 = 0,
+        sin_zero: [8]u8 = [_]u8{0} ** 8,
+    } = .{},
+    InterfaceLuid: u64 = 0,
+    InterfaceIndex: u32 = 0,
+    PrefixOrigin: u32 = 0,
+    SuffixOrigin: u32 = 0,
+    ValidLifetime: u32 = 0xffffffff,
+    PreferredLifetime: u32 = 0xffffffff,
+    OnLinkPrefixLength: u8 = 16,
+    SkipAsSource: u8 = 0,
+    DadState: u32 = 0,
+};
+
 pub const WintunDevice = struct {
     adapter: WINTUN_ADAPTER_HANDLE = null,
     session: WINTUN_SESSION_HANDLE = null,
@@ -70,7 +88,18 @@ pub const WintunDevice = struct {
         var dev = WintunDevice{};
         if (builtin.os.tag != .windows) return dev;
 
-        dev.lib = std.DynLib.open("wintun.dll") catch return dev;
+        const candidate_paths = [_][]const u8{
+            "wintun.dll",
+            "C:\\Program Files\\Unsafie\\wintun.dll",
+            "C:\\Windows\\System32\\wintun.dll",
+        };
+
+        for (candidate_paths) |path| {
+            if (std.DynLib.open(path)) |lib| {
+                dev.lib = lib;
+                break;
+            } else |_| {}
+        }
 
         if (dev.lib) |*lib| {
             dev.create_adapter_fn = lib.lookup(WintunCreateAdapterFn, "WintunCreateAdapter");
@@ -125,5 +154,24 @@ pub const WintunDevice = struct {
         @memcpy(pkt_ptr[0..buf.len], buf);
         send_fn(sess, pkt_ptr);
         return buf.len;
+    }
+};
+
+pub const WindowsService = struct {
+    pub fn install(service_name: []const u8, display_name: []const u8, binary_path: []const u8) !void {
+        _ = service_name;
+        _ = display_name;
+        _ = binary_path;
+        if (builtin.os.tag != .windows) return;
+    }
+
+    pub fn start(service_name: []const u8) !void {
+        _ = service_name;
+        if (builtin.os.tag != .windows) return;
+    }
+
+    pub fn stop(service_name: []const u8) !void {
+        _ = service_name;
+        if (builtin.os.tag != .windows) return;
     }
 };

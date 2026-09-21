@@ -35,15 +35,15 @@ cd-all:
     set -euo pipefail
     mkdir -p dist/bin dist/packages android/app/src/main/jniLibs/arm64-v8a android/app/src/main/jniLibs/x86_64
 
-    (cd zig && zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseFast && cp zig-out/bin/unsafie ../dist/bin/unsafie-x86_64-linux) &
+    (cd zig && zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-x86_64-linux) &
     PID1=$!
-    (cd zig && zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseFast && cp zig-out/bin/unsafie ../dist/bin/unsafie-aarch64-linux) &
+    (cd zig && zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-aarch64-linux) &
     PID2=$!
-    (cd zig && zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast && cp zig-out/bin/unsafie.exe ../dist/bin/unsafie-x86_64.exe) &
+    (cd zig && zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud.exe ../dist/bin/unsafie-cloud-x86_64.exe) &
     PID3=$!
-    (cd zig && zig build -Dtarget=aarch64-macos -Doptimize=ReleaseFast && cp zig-out/bin/unsafie ../dist/bin/unsafie-aarch64-macos) &
+    (cd zig && zig build -Dtarget=aarch64-macos -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-aarch64-macos) &
     PID4=$!
-    (cd zig && zig build -Dtarget=x86_64-macos -Doptimize=ReleaseFast && cp zig-out/bin/unsafie ../dist/bin/unsafie-x86_64-macos) &
+    (cd zig && zig build -Dtarget=x86_64-macos -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-x86_64-macos) &
     PID5=$!
     (cd zig && zig build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast && cp zig-out/lib/libunsafie_core.so ../android/app/src/main/jniLibs/arm64-v8a/libunsafie_core.so) &
     PID6=$!
@@ -54,11 +54,11 @@ cd-all:
 
     wait $PID1 $PID2 $PID3 $PID4 $PID5 $PID6 $PID7 $PID8
 
-    tar -czf dist/unsafie-linux-x86_64.tar.gz -C dist/bin unsafie-x86_64-linux
-    tar -czf dist/unsafie-linux-aarch64.tar.gz -C dist/bin unsafie-aarch64-linux
-    zip -j dist/unsafie-windows-x86_64.zip dist/bin/unsafie-x86_64.exe
-    tar -czf dist/unsafie-macos-aarch64.tar.gz -C dist/bin unsafie-aarch64-macos
-    tar -czf dist/unsafie-macos-x86_64.tar.gz -C dist/bin unsafie-x86_64-macos
+    tar -czf dist/unsafie-cloud-linux-x86_64.tar.gz -C dist/bin unsafie-cloud-x86_64-linux
+    tar -czf dist/unsafie-cloud-linux-aarch64.tar.gz -C dist/bin unsafie-cloud-aarch64-linux
+    zip -j dist/unsafie-cloud-windows-x86_64.zip dist/bin/unsafie-cloud-x86_64.exe
+    tar -czf dist/unsafie-cloud-macos-aarch64.tar.gz -C dist/bin unsafie-cloud-aarch64-macos
+    tar -czf dist/unsafie-cloud-macos-x86_64.tar.gz -C dist/bin unsafie-cloud-x86_64-macos
     zip -j dist/unsafie-android.apk android/app/src/main/jniLibs/arm64-v8a/libunsafie_core.so android/app/src/main/AndroidManifest.xml
 
     VERSION=$(cat python/pyproject.toml | grep -o 'version = "[^"]*"' | cut -d'"' -f2 || echo "0.1.0")

@@ -6,14 +6,14 @@ try {
     $Asset = $Release.assets | Where-Object { $_.name -like "*windows-x86_64*.zip" -or $_.name -like "*windows-x86_64*.exe" } | Select-Object -First 1
     $DownloadUrl = $Asset.browser_download_url
 } catch {
-    $DownloadUrl = "https://github.com/$Repo/releases/latest/download/unsafie-windows-x86_64.exe"
+    $DownloadUrl = "https://github.com/$Repo/releases/latest/download/unsafie-cloud-windows-x86_64.exe"
 }
 
 $InstallDir = "$env:ProgramFiles\Unsafie"
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
-$Dest = Join-Path $InstallDir "unsafie.exe"
+$Dest = Join-Path $InstallDir "unsafie-cloud.exe"
 
 Write-Host "Downloading Unsafie Cloud..."
 Invoke-WebRequest -Uri $DownloadUrl -OutFile $Dest

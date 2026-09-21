@@ -6,7 +6,7 @@ const table = @import("../ui/table.zig").Table;
 pub fn execute(c: client.Client, args: []const []const u8) !void {
     _ = c;
     if (args.len < 1) {
-        std.debug.print("Usage: unsafie domain <list|ensure|delete>\n", .{});
+        std.debug.print("Usage: unsafie-cloud domain <list|ensure|delete>\n", .{});
         return;
     }
     const sub = args[0];

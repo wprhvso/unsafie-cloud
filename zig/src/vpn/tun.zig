@@ -30,7 +30,20 @@ pub const TunDevice = struct {
             };
         }
 
-        const file = std.fs.openFileAbsolute("/dev/net/tun", .{ .mode = .read_write }) catch {
+        const tun_paths = [_][]const u8{
+            "/dev/net/tun",
+            "/dev/tun",
+        };
+
+        var maybe_file: ?std.fs.File = null;
+        for (tun_paths) |path| {
+            if (std.fs.openFileAbsolute(path, .{ .mode = .read_write })) |f| {
+                maybe_file = f;
+                break;
+            } else |_| {}
+        }
+
+        const file = maybe_file orelse {
             return .{
                 .fd = -1,
                 .name = [_]u8{0} ** 16,
@@ -66,9 +79,29 @@ pub const TunDevice = struct {
 
     fn setupLink(self: *TunDevice, ifname: []const u8) !void {
         _ = self;
-        if (builtin.os.tag == .windows) return;
-        var child1 = std.process.Child.init(&[_][]const u8{ "ip", "link", "set", ifname, "up", "mtu", "1420" }, std.heap.page_allocator);
-        _ = child1.spawnAndWait() catch {};
+        if (builtin.os.tag != .linux) return;
+
+        const sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch return;
+        defer std.posix.close(sock);
+
+        var ifr: extern struct {
+            name: [16]u8 = [_]u8{0} ** 16,
+            data: extern union {
+                flags: c_short,
+                mtu: c_int,
+                padding: [24]u8,
+            } = .{ .flags = 0 },
+        } = .{};
+
+        const copy_len = @min(ifname.len, 15);
+        @memcpy(ifr.name[0..copy_len], ifname[0..copy_len]);
+
+        ifr.data.mtu = 1420;
+        _ = std.posix.system.ioctl(sock, 0x8922, @intFromPtr(&ifr));
+
+        _ = std.posix.system.ioctl(sock, 0x8913, @intFromPtr(&ifr));
+        ifr.data.flags |= 0x0001 | 0x0040;
+        _ = std.posix.system.ioctl(sock, 0x8914, @intFromPtr(&ifr));
     }
 
     pub fn deinit(self: *TunDevice) void {

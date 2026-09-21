@@ -43,3 +43,10 @@ export fn Java_com_unsafie_vpn_NativeCore_getVpnIp(env: *anyopaque, clazz: *anyo
     _ = clazz;
     return "10.42.10.15";
 }
+
+export fn Java_com_unsafie_vpn_NativeCore_protectSocket(env: *anyopaque, clazz: *anyopaque, socket_fd: i32) callconv(.c) i32 {
+    _ = env;
+    _ = clazz;
+    _ = socket_fd;
+    return 0;
+}

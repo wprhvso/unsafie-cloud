@@ -24,18 +24,18 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 echo "Downloading Unsafie Cloud from ${LATEST_URL}..."
 if curl -fsSL "$LATEST_URL" -o "${TMP_DIR}/unsafie.tar.gz" 2>/dev/null; then
     tar -xzf "${TMP_DIR}/unsafie.tar.gz" -C "$TMP_DIR"
-    BIN_PATH="${TMP_DIR}/unsafie"
+    BIN_PATH="${TMP_DIR}/unsafie-cloud"
 else
     FALLBACK_URL="https://github.com/${REPO}/releases/latest/download/unsafie-${OS}-${ARCH}"
     curl -fsSL "$FALLBACK_URL" -o "${TMP_DIR}/unsafie"
-    BIN_PATH="${TMP_DIR}/unsafie"
+    BIN_PATH="${TMP_DIR}/unsafie-cloud"
 fi
 
 chmod +x "$BIN_PATH"
 if [ -w "/usr/local/bin" ]; then
-    mv "$BIN_PATH" /usr/local/bin/unsafie
+    mv "$BIN_PATH" /usr/local/bin/unsafie-cloud
 else
-    sudo mv "$BIN_PATH" /usr/local/bin/unsafie
+    sudo mv "$BIN_PATH" /usr/local/bin/unsafie-cloud
 fi
 
-echo "Unsafie Cloud successfully installed to /usr/local/bin/unsafie"
+echo "Unsafie Cloud successfully installed to /usr/local/bin/unsafie-cloud"

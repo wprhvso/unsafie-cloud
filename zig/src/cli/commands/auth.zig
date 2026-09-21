@@ -4,7 +4,7 @@ const spinner = @import("../ui/spinner.zig").Spinner;
 
 pub fn execute(c: client.Client, args: []const []const u8) !void {
     if (args.len < 1) {
-        std.debug.print("Usage: unsafie auth <login|status|logout>\n", .{});
+        std.debug.print("Usage: unsafie-cloud auth <login|status|logout>\n", .{});
         return;
     }
     const sub = args[0];

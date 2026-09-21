@@ -17,11 +17,12 @@ const cmd_completion = @import("commands/completion.zig");
 const cmd_logs = @import("commands/logs.zig");
 const cmd_events = @import("commands/events.zig");
 const cmd_host = @import("commands/host.zig");
+const cmd_service = @import("commands/service.zig");
 
 pub fn printHelp() void {
     std.debug.print(
         \\Unsafie Cloud CLI
-        \\Usage: unsafie <command> [subcommand] [flags]
+        \\Usage: unsafie-cloud <command> [subcommand] [flags]
         \\
         \\Commands:
         \\  run          Run node and mesh VPN daemon locally
@@ -36,6 +37,7 @@ pub fn printHelp() void {
         \\  quota        User resource quotas and whitelist grants (get, set, grant)
         \\  kernel       Zero-downtime A/B kernel rollout (status, upgrade)
         \\  host         Idempotent host provisioning and sysctl/firewall setup (bootstrap, setup)
+        \\  service      Cross-platform service management (install, start, stop, status)
         \\  events       Immutable event ledger stream (list, tail, audit)
         \\  logs         Cluster-wide JSONL structured logs (tail, filter)
         \\  top          Interactive live terminal TUI dashboard
@@ -72,6 +74,8 @@ pub fn execute(allocator: std.mem.Allocator, cmd: []const u8, subargs: []const [
         try cmd_kernel.execute(cl, subargs);
     } else if (std.mem.eql(u8, cmd, "host")) {
         try cmd_host.execute(cl, subargs);
+    } else if (std.mem.eql(u8, cmd, "service")) {
+        try cmd_service.execute(cl, subargs);
     } else if (std.mem.eql(u8, cmd, "events")) {
         try cmd_events.execute(cl, subargs);
     } else if (std.mem.eql(u8, cmd, "logs")) {
@@ -81,6 +85,6 @@ pub fn execute(allocator: std.mem.Allocator, cmd: []const u8, subargs: []const [
     } else if (std.mem.eql(u8, cmd, "completion")) {
         try cmd_completion.execute(subargs);
     } else {
-        std.debug.print("Unknown command: {s}\nRun 'unsafie' without arguments for help.\n", .{cmd});
+        std.debug.print("Unknown command: {s}\nRun 'unsafie-cloud' without arguments for help.\n", .{cmd});
     }
 }
