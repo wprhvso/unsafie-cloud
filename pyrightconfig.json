@@ -1,5 +1,7 @@
 {
-  "extraPaths": ["python"],
+  "extraPaths": [
+    "python"
+  ],
   "reportMissingImports": "none",
   "reportImplicitRelativeImport": "none",
   "reportUnknownVariableType": "none",
