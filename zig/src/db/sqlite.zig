@@ -97,13 +97,6 @@ pub const SqliteDb = struct {
             \\    ip TEXT,
             \\    updated_at INTEGER
             \\);
-            \\CREATE TABLE IF NOT EXISTS gh_tokens (
-            \\    slug TEXT PRIMARY KEY,
-            \\    enc_token BLOB,
-            \\    concurrency INTEGER,
-            \\    active_jobs INTEGER DEFAULT 0,
-            \\    cooldown_until INTEGER DEFAULT 0
-            \\);
         );
     }
 
