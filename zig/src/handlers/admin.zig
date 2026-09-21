@@ -86,4 +86,9 @@ pub const AdminHandler = struct {
         const arr = std.json.Array.init(allocator);
         return std.json.Value{ .array = arr };
     }
+
+    pub fn handleEventsStatus(allocator: std.mem.Allocator) !std.json.Value {
+        _ = allocator;
+        return std.json.Value{ .string = "ledger_healthy" };
+    }
 };

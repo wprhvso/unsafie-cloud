@@ -7,6 +7,7 @@ const edge = @import("edge/server.zig");
 const ws = @import("ws/server.zig");
 const watchdog = @import("cluster/watchdog.zig");
 const vpn = @import("vpn/service.zig");
+const ledger = @import("ledger/engine.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -25,6 +26,10 @@ pub fn main() !void {
     const runner = ansible_runner.AnsibleRunner.init(allocator);
     _ = runner;
 
+    var ledger_engine = try ledger.LedgerEngine.init(allocator, 1, cfg.state_dir);
+    defer ledger_engine.deinit();
+    _ = try ledger_engine.emit(.node_heartbeat, "{}");
+
     var vpn_service = try vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet);
     defer vpn_service.deinit();
 
@@ -37,5 +42,5 @@ pub fn main() !void {
     watchdog.SystemdWatchdog.notifyReady();
     watchdog.SystemdWatchdog.notifyWatchdog();
 
-    std.debug.print("Unsafie Cloud GitOps-Mesh kernel initialized successfully\n", .{});
+    std.debug.print("Unsafie Cloud Event-Ledger & Mesh kernel initialized successfully\n", .{});
 }
