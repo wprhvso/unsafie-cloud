@@ -1,0 +1,46 @@
+MAIN_BRANCH_NAME='main'
+VERSION_FILE='zig/build.zig.zon'
+TEXT_BEFORE_VERSION_CODE='.version = "'
+TEXT_AFTER_VERSION_CODE='",'
+MODULE_ROOT_PATH=''
+IS_INCREMENT_REQUIRED_ONLY_ON_CHANGES='true'
+MINOR_CHANGING_LOCATIONS=''
+MAJOR_CHANGING_LOCATIONS=''
+PROJECT_MODULES='ZIG,PYTHON,ANDROID'
+
+ZIG_VERSION_FILE='zig/build.zig.zon'
+ZIG_TEXT_BEFORE_VERSION_CODE='.version = "'
+ZIG_TEXT_AFTER_VERSION_CODE='",'
+ZIG_MODULE_ROOT_PATH=''
+ZIG_IS_INCREMENT_REQUIRED_ONLY_ON_CHANGES='true'
+ZIG_MINOR_CHANGING_LOCATIONS=''
+ZIG_MAJOR_CHANGING_LOCATIONS=''
+ZIG_MODULE_DESCRIPTION='version in zig/build.zig.zon'
+
+PYTHON_VERSION_FILE='python/pyproject.toml'
+PYTHON_TEXT_BEFORE_VERSION_CODE='version = "'
+PYTHON_TEXT_AFTER_VERSION_CODE='"'
+PYTHON_MODULE_ROOT_PATH=''
+PYTHON_IS_INCREMENT_REQUIRED_ONLY_ON_CHANGES='true'
+PYTHON_MINOR_CHANGING_LOCATIONS=''
+PYTHON_MAJOR_CHANGING_LOCATIONS=''
+PYTHON_MODULE_DESCRIPTION='version in python/pyproject.toml'
+
+ANDROID_VERSION_FILE='android/app/build.gradle'
+ANDROID_TEXT_BEFORE_VERSION_CODE='versionName "'
+ANDROID_TEXT_AFTER_VERSION_CODE='"'
+ANDROID_MODULE_ROOT_PATH=''
+ANDROID_IS_INCREMENT_REQUIRED_ONLY_ON_CHANGES='true'
+ANDROID_MINOR_CHANGING_LOCATIONS=''
+ANDROID_MAJOR_CHANGING_LOCATIONS=''
+ANDROID_MODULE_DESCRIPTION='versionName in the Android app'
+
+function after_successful_version_update() {
+  old_version=$1
+  new_version=$2
+  [ "$SPECIFIED_PROJECT_MODULE" = 'ANDROID' ] || return 0
+  [ "$old_version" = "$new_version" ] && return 0
+  gradle="$ROOT_REPO_DIR/android/app/build.gradle"
+  code=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' "$gradle")
+  sed -i "s/versionCode .*/versionCode $((code + 1))/" "$gradle"
+}

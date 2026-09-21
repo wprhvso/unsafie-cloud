@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "unsafie-cloud",
+        .name = "unsafie",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
@@ -38,4 +38,27 @@ pub fn build(b: *std.Build) void {
         }),
     });
     b.installArtifact(lib);
+
+    const test_step = b.step("test", "Run tests");
+    const unit_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    unit_tests.addIncludePath(sqlite_dep.path("."));
+    unit_tests.addCSourceFile(.{
+        .file = sqlite_dep.path("sqlite3.c"),
+        .flags = &[_][]const u8{
+            "-DSQLITE_ENABLE_FTS5",
+            "-DSQLITE_ENABLE_RTREE",
+            "-DSQLITE_THREADSAFE=1",
+            "-DSQLITE_ENABLE_JSON1",
+            "-DSQLITE_OMIT_LOAD_EXTENSION",
+        },
+    });
+    unit_tests.linkLibC();
+    const run_unit_tests = b.addRunArtifact(unit_tests);
+    test_step.dependOn(&run_unit_tests.step);
 }

@@ -1,0 +1,15 @@
+{
+  "extraPaths": ["python"],
+  "reportMissingImports": "none",
+  "reportImplicitRelativeImport": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownParameterType": "none",
+  "reportMissingParameterType": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportExplicitAny": "none",
+  "reportAny": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportArgumentType": "none"
+}

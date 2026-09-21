@@ -9,6 +9,7 @@ const vpn = @import("vpn/service.zig");
 const ledger = @import("ledger/engine.zig");
 const db_mod = @import("db/sqlite.zig");
 const host_mod = @import("host/provisioner.zig");
+const cli = @import("cli/main.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -19,18 +20,26 @@ pub fn main() !void {
     defer args.deinit();
 
     _ = args.skip();
-    if (args.next()) |subcmd| {
-        if (std.mem.eql(u8, subcmd, "host-setup") or std.mem.eql(u8, subcmd, "bootstrap")) {
-            var cfg = try config.Config.load(allocator);
-            defer cfg.deinit(allocator);
-
-            const prov = host_mod.HostProvisioner.init(allocator);
-            try prov.bootstrapAll(cfg.vpn_iface);
-            std.debug.print("Host provisioning completed successfully\n", .{});
+    if (args.next()) |cmd| {
+        if (std.mem.eql(u8, cmd, "run") or std.mem.eql(u8, cmd, "daemon") or std.mem.eql(u8, cmd, "server")) {
+            return runDaemon(allocator);
+        } else if (std.mem.eql(u8, cmd, "help") or std.mem.eql(u8, cmd, "--help") or std.mem.eql(u8, cmd, "-h")) {
+            cli.printHelp();
             return;
+        } else {
+            var subargs = std.ArrayList([]const u8){};
+            defer subargs.deinit(allocator);
+            while (args.next()) |arg| {
+                try subargs.append(allocator, arg);
+            }
+            return cli.execute(allocator, cmd, subargs.items);
         }
     }
 
+    return runDaemon(allocator);
+}
+
+fn runDaemon(allocator: std.mem.Allocator) !void {
     var cfg = try config.Config.load(allocator);
     defer cfg.deinit(allocator);
 
@@ -63,5 +72,5 @@ pub fn main() !void {
     watchdog.SystemdWatchdog.notifyReady();
     watchdog.SystemdWatchdog.notifyWatchdog();
 
-    std.debug.print("Unsafie Cloud SQLite-WAL, Event-Ledger & Mesh kernel initialized successfully\n", .{});
+    std.debug.print("Unsafie Cloud Unified Sovereign Node initialized successfully\n", .{});
 }

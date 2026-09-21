@@ -1,4 +1,3 @@
-
 from unsafie_cloud.models import DomainResult
 
 
