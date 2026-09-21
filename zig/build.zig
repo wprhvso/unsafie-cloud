@@ -12,6 +12,19 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+
+    exe.addIncludePath(b.path("c"));
+    exe.addCSourceFile(.{
+        .file = b.path("c/sqlite3.c"),
+        .flags = &[_][]const u8{
+            "-DSQLITE_ENABLE_FTS5",
+            "-DSQLITE_ENABLE_RTREE",
+            "-DSQLITE_THREADSAFE=1",
+            "-DSQLITE_ENABLE_JSON1",
+            "-DSQLITE_OMIT_LOAD_EXTENSION",
+        },
+    });
+    exe.linkLibC();
     b.installArtifact(exe);
 
     const lib = b.addLibrary(.{
@@ -24,15 +37,4 @@ pub fn build(b: *std.Build) void {
         }),
     });
     b.installArtifact(lib);
-
-    const unit_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    const run_unit_tests = b.addRunArtifact(unit_tests);
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
 }

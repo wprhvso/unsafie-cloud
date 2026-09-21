@@ -56,6 +56,8 @@ pub const Dispatcher = struct {
             return admin_h.AdminHandler.handleMeshTopology(allocator);
         } else if (std.mem.eql(u8, action, "logs.get") or std.mem.eql(u8, action, "logs.tail")) {
             return admin_h.AdminHandler.handleLogsGet(allocator, params);
+        } else if (std.mem.eql(u8, action, "logs.search")) {
+            return admin_h.AdminHandler.handleLogsSearch(allocator, params);
         } else if (std.mem.eql(u8, action, "events.status") or std.mem.eql(u8, action, "events.list")) {
             return admin_h.AdminHandler.handleEventsStatus(allocator);
         } else if (std.mem.eql(u8, action, "fleet.account_add")) {

@@ -8,6 +8,7 @@ const ws = @import("ws/server.zig");
 const watchdog = @import("cluster/watchdog.zig");
 const vpn = @import("vpn/service.zig");
 const ledger = @import("ledger/engine.zig");
+const db_mod = @import("db/sqlite.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -22,6 +23,13 @@ pub fn main() !void {
 
     const storage = disk_storage.DiskStorage.init(cfg.storage_dir);
     try storage.ensureDirs();
+
+    const db_file_path = try std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" });
+    defer allocator.free(db_file_path);
+    var sqlite_db = try db_mod.SqliteDb.init(allocator, db_file_path);
+    defer sqlite_db.deinit();
+
+    try sqlite_db.insertLog(std.time.milliTimestamp(), "node1", "INFO", "kernel", "kernel initialized with sqlite wal & fts5");
 
     const runner = ansible_runner.AnsibleRunner.init(allocator);
     _ = runner;
@@ -42,5 +50,5 @@ pub fn main() !void {
     watchdog.SystemdWatchdog.notifyReady();
     watchdog.SystemdWatchdog.notifyWatchdog();
 
-    std.debug.print("Unsafie Cloud Event-Ledger & Mesh kernel initialized successfully\n", .{});
+    std.debug.print("Unsafie Cloud SQLite-WAL, Event-Ledger & Mesh kernel initialized successfully\n", .{});
 }
