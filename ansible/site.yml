@@ -4,6 +4,3 @@
 
 - name: setup kvm hypervisors
   ansible.builtin.import_playbook: playbooks/hypervisors.yml
-
-- name: setup observability pipeline
-  ansible.builtin.import_playbook: playbooks/observability.yml

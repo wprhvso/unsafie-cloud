@@ -28,8 +28,6 @@ bootstrap:
 hypervisors:
     ansible-playbook -i ansible/hosts.ini ansible/playbooks/hypervisors.yml
 
-observability:
-    ansible-playbook -i ansible/hosts.ini ansible/playbooks/observability.yml
 
 ci-check:
     cd zig && zig fmt --check src/

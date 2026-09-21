@@ -80,4 +80,10 @@ pub const AdminHandler = struct {
         _ = params;
         return std.json.Value{ .string = "kernel_upgrade_initiated" };
     }
+
+    pub fn handleLogsGet(allocator: std.mem.Allocator, params: ?std.json.Value) !std.json.Value {
+        _ = params;
+        const arr = std.json.Array.init(allocator);
+        return std.json.Value{ .array = arr };
+    }
 };

@@ -14,6 +14,7 @@ const cmd_quota = @import("commands/quota.zig");
 const cmd_kernel = @import("commands/kernel.zig");
 const cmd_top = @import("commands/top.zig");
 const cmd_completion = @import("commands/completion.zig");
+const cmd_logs = @import("commands/logs.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -41,6 +42,7 @@ pub fn main() !void {
             \\  token        API token minting and revocation (create, list, revoke)
             \\  quota        User resource quotas and whitelist grants (get, set, grant)
             \\  kernel       Zero-downtime A/B kernel rollout (status, upgrade)
+            \\  logs         Cluster-wide JSONL structured logs (tail, filter)
             \\  top          Interactive live terminal TUI dashboard
             \\  completion   Shell completions generator (bash, zsh, fish)
             \\
@@ -80,6 +82,8 @@ pub fn main() !void {
         try cmd_quota.execute(cl, subargs.items);
     } else if (std.mem.eql(u8, cmd, "kernel")) {
         try cmd_kernel.execute(cl, subargs.items);
+    } else if (std.mem.eql(u8, cmd, "logs")) {
+        try cmd_logs.execute(cl, subargs.items);
     } else if (std.mem.eql(u8, cmd, "top")) {
         try cmd_top.execute(cl, subargs.items);
     } else if (std.mem.eql(u8, cmd, "completion")) {
