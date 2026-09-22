@@ -56,6 +56,11 @@ cd-all:
 
     zip -j dist/unsafie-android.apk android/app/src/main/jniLibs/arm64-v8a/libunsafie_core.so android/app/src/main/AndroidManifest.xml
 
-    VERSION=$(cat python/pyproject.toml | grep -o 'version = "[^"]*"' | cut -d'"' -f2 || echo "0.1.0")
+    VERSION=$(awk -F '[Count"= ]+' '/^version[ ]*=/ {gsub(/[\047"]/, "", $2); print $2}' python/pyproject.toml)
+    if [ -z "$VERSION" ]; then
+        echo "Fehler: VERSION konnte nicht aus python/pyproject.toml extrahiert werden!" >&2
+        exit 1
+    fi
     TAG="v${VERSION}"
-    gh release create "${TAG}" dist/* --title "Unsafie Cloud ${TAG}" --generate-notes || true
+    gh release create "${TAG}" dist/* --title "Unsafie Cloud ${TAG}" --generate-notes
+
