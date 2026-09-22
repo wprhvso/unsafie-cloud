@@ -19,12 +19,17 @@ jobs:
 
       - uses: extractions/setup-just@v2
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - uses: astral-sh/setup-uv@v5
         with:
           version: latest
 
-      - name: install python tools
+      - name: install python tools and dependencies
         run: |
+          uv pip install --system -e ./python
           uv tool install ruff
           uv tool install basedpyright
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"

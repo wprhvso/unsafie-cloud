@@ -13,5 +13,6 @@
   "reportExplicitAny": "none",
   "reportAny": "none",
   "reportOptionalMemberAccess": "none",
-  "reportArgumentType": "none"
+  "reportArgumentType": "none",
+  "reportUntypedBaseClass": "none"
 }
