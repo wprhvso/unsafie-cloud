@@ -10,22 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.15.1
+
+      - name: setup zig
+        run: |
+          curl -fsSL https://ziglang.org/download/0.15.1/zig-x86_64-linux-0.15.1.tar.xz | sudo tar -xJ -C /opt
+          echo "/opt/zig-x86_64-linux-0.15.1" >> "$GITHUB_PATH"
+
       - uses: extractions/setup-just@v2
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: just ci-build-all
-      - run: just ci-android
-      - run: just cd-package
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/*.apk
-            dist/packages/*
+
+      - name: run release build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: just cd-all

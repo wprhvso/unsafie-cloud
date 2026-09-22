@@ -11,13 +11,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v1
-        with:
-          version: 0.15.1
+
+      - name: setup zig
+        run: |
+          curl -fsSL https://ziglang.org/download/0.15.1/zig-x86_64-linux-0.15.1.tar.xz | sudo tar -xJ -C /opt
+          echo "/opt/zig-x86_64-linux-0.15.1" >> "$GITHUB_PATH"
+
       - uses: extractions/setup-just@v2
-      - uses: actions/setup-python@v5
+
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
-      - run: just ci-check
-      - run: just ci-test
-      - run: just ci-build
+          version: latest
+
+      - name: install python tools
+        run: |
+          uv tool install ruff
+          uv tool install basedpyright
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: install ktlint
+        run: |
+          curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint
+          chmod a+x ktlint
+          sudo mv ktlint /usr/local/bin/
+
+      - name: run ci
+        run: just ci

@@ -2,7 +2,7 @@ const std = @import("std");
 const client = @import("../client.zig");
 const spinner = @import("../ui/spinner.zig").Spinner;
 
-pub fn execute(c: client.Client, args: []const []const u8) !void {
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
     if (args.len < 1) {
         std.debug.print("Usage: unsafie-cloud auth <login|status|logout>\n", .{});
         return;
@@ -17,5 +17,5 @@ pub fn execute(c: client.Client, args: []const []const u8) !void {
     } else {
         std.debug.print("Unknown auth command: {s}\n", .{sub});
     }
-    _ = c;
+    _ = api_client;
 }

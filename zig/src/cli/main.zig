@@ -47,41 +47,41 @@ pub fn printHelp() void {
 }
 
 pub fn execute(allocator: std.mem.Allocator, cmd: []const u8, subargs: []const []const u8) !void {
-    var cfg = try config.Config.load(allocator);
-    defer cfg.deinit(allocator);
+    var app_config = try config.Config.load(allocator);
+    defer app_config.deinit(allocator);
 
-    const cl = client.Client.init(allocator, cfg);
+    const api_client = client.Client.init(allocator, app_config);
 
     if (std.mem.eql(u8, cmd, "auth")) {
-        try cmd_auth.execute(cl, subargs);
+        try cmd_auth.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "vm")) {
-        try cmd_vm.execute(cl, subargs);
+        try cmd_vm.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "iso")) {
-        try cmd_iso.execute(cl, subargs);
+        try cmd_iso.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "image")) {
-        try cmd_image.execute(cl, subargs);
+        try cmd_image.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "domain")) {
-        try cmd_domain.execute(cl, subargs);
+        try cmd_domain.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "port")) {
-        try cmd_port.execute(cl, subargs);
+        try cmd_port.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "node")) {
-        try cmd_node.execute(cl, subargs);
+        try cmd_node.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "token")) {
-        try cmd_token.execute(cl, subargs);
+        try cmd_token.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "quota")) {
-        try cmd_quota.execute(cl, subargs);
+        try cmd_quota.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "kernel")) {
-        try cmd_kernel.execute(cl, subargs);
+        try cmd_kernel.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "host")) {
-        try cmd_host.execute(cl, subargs);
+        try cmd_host.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "service")) {
-        try cmd_service.execute(cl, subargs);
+        try cmd_service.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "events")) {
-        try cmd_events.execute(cl, subargs);
+        try cmd_events.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "logs")) {
-        try cmd_logs.execute(cl, subargs);
+        try cmd_logs.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "top")) {
-        try cmd_top.execute(cl, subargs);
+        try cmd_top.execute(api_client, subargs);
     } else if (std.mem.eql(u8, cmd, "completion")) {
         try cmd_completion.execute(subargs);
     } else {

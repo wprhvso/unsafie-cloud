@@ -3,8 +3,8 @@ const client = @import("../client.zig");
 const spinner = @import("../ui/spinner.zig").Spinner;
 const table = @import("../ui/table.zig").Table;
 
-pub fn execute(c: client.Client, args: []const []const u8) !void {
-    _ = c;
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
+    _ = api_client;
     if (args.len < 1) {
         std.debug.print("Usage: unsafie-cloud port <list|ensure|delete>\n", .{});
         return;

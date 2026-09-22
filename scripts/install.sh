@@ -13,21 +13,22 @@ esac
 
 LATEST_RELEASE=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null || true)
 if [ -n "$LATEST_RELEASE" ]; then
-    LATEST_URL=$(echo "$LATEST_RELEASE" | grep -o "https://[^\"]*unsafie-${OS}-${ARCH}[^\"]*" | head -n 1)
+    LATEST_URL=$(echo "$LATEST_RELEASE" | grep -o "https://[^"]*unsafie-cloud-${OS}-${ARCH}[^"]*" | head -n 1)
 else
-    LATEST_URL="https://github.com/${REPO}/releases/latest/download/unsafie-${OS}-${ARCH}.tar.gz"
+    LATEST_URL="https://github.com/${REPO}/releases/latest/download/unsafie-cloud-${OS}-${ARCH}.tar.gz"
 fi
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "Downloading Unsafie Cloud from ${LATEST_URL}..."
-if curl -fsSL "$LATEST_URL" -o "${TMP_DIR}/unsafie.tar.gz" 2>/dev/null; then
-    tar -xzf "${TMP_DIR}/unsafie.tar.gz" -C "$TMP_DIR"
-    BIN_PATH="${TMP_DIR}/unsafie-cloud"
+if curl -fsSL "$LATEST_URL" -o "${TMP_DIR}/unsafie-cloud.tar.gz" 2>/dev/null; then
+    tar -xzf "${TMP_DIR}/unsafie-cloud.tar.gz" -C "$TMP_DIR"
+    EXTRACTED=$(find "$TMP_DIR" -type f -name "unsafie-cloud*" ! -name "*.tar.gz" | head -n 1)
+    BIN_PATH="${EXTRACTED:-${TMP_DIR}/unsafie-cloud}"
 else
-    FALLBACK_URL="https://github.com/${REPO}/releases/latest/download/unsafie-${OS}-${ARCH}"
-    curl -fsSL "$FALLBACK_URL" -o "${TMP_DIR}/unsafie"
+    FALLBACK_URL="https://github.com/${REPO}/releases/latest/download/unsafie-cloud-${OS}-${ARCH}"
+    curl -fsSL "$FALLBACK_URL" -o "${TMP_DIR}/unsafie-cloud"
     BIN_PATH="${TMP_DIR}/unsafie-cloud"
 fi
 

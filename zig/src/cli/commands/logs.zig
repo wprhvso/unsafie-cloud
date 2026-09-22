@@ -1,10 +1,10 @@
 const std = @import("std");
 const client = @import("../client.zig");
 
-pub fn execute(cl: client.Client, args: []const []const u8) !void {
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
     _ = args;
-    const res = try cl.rpc("logs.get", "{}");
-    defer cl.allocator.free(res);
+    const res = try api_client.rpc("logs.get", "{}");
+    defer api_client.allocator.free(res);
 
     std.debug.print("[SYSTEM] Fetching cluster logs...\n", .{});
     std.debug.print("Timestamp               Level  Node        Component  Message\n", .{});

@@ -54,9 +54,9 @@ pub const BpfSilencer = struct {
         }, std.heap.page_allocator);
         _ = child.spawnAndWait() catch {};
 
-        if (std.fs.openFileAbsolute("/proc/sys/net/ipv4/tcp_fin_timeout", .{ .mode = .write_only })) |f| {
-            defer f.close();
-            f.writeAll("15\n") catch {};
+        if (std.fs.openFileAbsolute("/proc/sys/net/ipv4/tcp_fin_timeout", .{ .mode = .write_only })) |timeout_file| {
+            defer timeout_file.close();
+            timeout_file.writeAll("15\n") catch {};
         } else |_| {}
     }
 };

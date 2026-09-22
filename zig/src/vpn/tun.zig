@@ -36,9 +36,9 @@ pub const TunDevice = struct {
         };
 
         var maybe_file: ?std.fs.File = null;
-        for (tun_paths) |path| {
-            if (std.fs.openFileAbsolute(path, .{ .mode = .read_write })) |f| {
-                maybe_file = f;
+        for (tun_paths) |tun_path| {
+            if (std.fs.openFileAbsolute(tun_path, .{ .mode = .read_write })) |opened_file| {
+                maybe_file = opened_file;
                 break;
             } else |_| {}
         }

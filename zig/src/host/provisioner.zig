@@ -8,9 +8,9 @@ pub const HostProvisioner = struct {
     }
 
     fn writeProc(path: []const u8, val: []const u8) void {
-        if (std.fs.openFileAbsolute(path, .{ .mode = .write_only })) |f| {
-            defer f.close();
-            f.writeAll(val) catch {};
+        if (std.fs.openFileAbsolute(path, .{ .mode = .write_only })) |proc_file| {
+            defer proc_file.close();
+            proc_file.writeAll(val) catch {};
         } else |_| {}
     }
 
@@ -119,10 +119,10 @@ pub const HostProvisioner = struct {
     pub fn ensureService(self: HostProvisioner) !void {
         _ = self;
         var is_systemd = false;
-        if (std.fs.openFileAbsolute("/proc/1/comm", .{})) |f| {
-            defer f.close();
+        if (std.fs.openFileAbsolute("/proc/1/comm", .{})) |comm_file| {
+            defer comm_file.close();
             var buf: [64]u8 = undefined;
-            const len = f.readAll(&buf) catch 0;
+            const len = comm_file.readAll(&buf) catch 0;
             if (std.mem.startsWith(u8, buf[0..len], "systemd")) {
                 is_systemd = true;
             }
