@@ -2,8 +2,8 @@ const std = @import("std");
 const client = @import("../client.zig");
 const spinner = @import("../ui/spinner.zig").Spinner;
 
-pub fn execute(c: client.Client, args: []const []const u8) !void {
-    _ = c;
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
+    _ = api_client;
     if (args.len < 1) {
         std.debug.print("Usage: unsafie-cloud kernel <status|upgrade>\n", .{});
         return;

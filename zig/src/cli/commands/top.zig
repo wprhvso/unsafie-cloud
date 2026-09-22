@@ -1,8 +1,8 @@
 const std = @import("std");
 const client = @import("../client.zig");
 
-pub fn execute(c: client.Client, args: []const []const u8) !void {
-    _ = c;
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
+    _ = api_client;
     _ = args;
     std.debug.print("+------------------ Unsafie Cloud TUI ------------------+\n", .{});
     std.debug.print("| Nodes: 3/3 Online | Active VMs: 4 | Domains: 2        |\n", .{});

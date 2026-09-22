@@ -3,7 +3,7 @@ const client = @import("../client.zig");
 const spinner = @import("../ui/spinner.zig").Spinner;
 const table = @import("../ui/table.zig").Table;
 
-pub fn execute(c: client.Client, args: []const []const u8) !void {
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
     if (args.len < 1) {
         std.debug.print("Usage: unsafie-cloud vm <list|ensure|get|delete|bake|start|stop|reboot|ssh|logs>\n", .{});
         return;
@@ -14,8 +14,8 @@ pub fn execute(c: client.Client, args: []const []const u8) !void {
         table.printRow(&[_][]const u8{ "worker-01", "4", "8192 MB", "10.42.1.15", "running" });
     } else if (std.mem.eql(u8, sub, "ensure")) {
         spinner.step("Ensuring virtual machine state");
-        const res = try c.rpc("vm.ensure", "{}");
-        defer c.allocator.free(res);
+        const res = try api_client.rpc("vm.ensure", "{}");
+        defer api_client.allocator.free(res);
         spinner.success("Virtual machine ready");
     } else if (std.mem.eql(u8, sub, "bake")) {
         spinner.step("Baking QCOW2 image to Cloudflare R2");

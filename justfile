@@ -6,6 +6,15 @@ fix:
 run:
     cd zig && zig build run
 
+ci: ci-zig-format ci-zig-test ci-android-lint ci-android-ktlint ci-python-ruff ci-python-ruff-format ci-python-basedpyright
+
+ci-check: ci-zig-format ci-python-ruff ci-python-ruff-format ci-python-basedpyright ci-android-lint ci-android-ktlint
+
+ci-test: ci-zig-test
+
+ci-build:
+    cd zig && zig build
+
 ci-zig-format:
     cd zig && zig fmt --check src/
 
@@ -36,23 +45,23 @@ cd-all:
     mkdir -p dist/bin dist/packages android/app/src/main/jniLibs/arm64-v8a android/app/src/main/jniLibs/x86_64
 
     (cd zig && zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-x86_64-linux) &
-    PID1=$!
+    pid_linux_x86_64=$!
     (cd zig && zig build -Dtarget=aarch64-linux-musl -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-aarch64-linux) &
-    PID2=$!
+    pid_linux_aarch64=$!
     (cd zig && zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud.exe ../dist/bin/unsafie-cloud-x86_64.exe) &
-    PID3=$!
+    pid_windows_x86_64=$!
     (cd zig && zig build -Dtarget=aarch64-macos -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-aarch64-macos) &
-    PID4=$!
+    pid_macos_aarch64=$!
     (cd zig && zig build -Dtarget=x86_64-macos -Doptimize=ReleaseFast && cp zig-out/bin/unsafie-cloud ../dist/bin/unsafie-cloud-x86_64-macos) &
-    PID5=$!
+    pid_macos_x86_64=$!
     (cd zig && zig build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast && cp zig-out/lib/libunsafie_core.so ../android/app/src/main/jniLibs/arm64-v8a/libunsafie_core.so) &
-    PID6=$!
+    pid_android_arm64=$!
     (cd zig && zig build -Dtarget=x86_64-linux-android -Doptimize=ReleaseFast && cp zig-out/lib/libunsafie_core.so ../android/app/src/main/jniLibs/x86_64/libunsafie_core.so) &
-    PID7=$!
+    pid_android_x86_64=$!
     (python3 -m pip install build --quiet 2>/dev/null || true; python3 -m build python/ -o dist/packages/ 2>/dev/null || true) &
-    PID8=$!
+    pid_python_pkg=$!
 
-    wait $PID1 $PID2 $PID3 $PID4 $PID5 $PID6 $PID7 $PID8
+    wait $pid_linux_x86_64 $pid_linux_aarch64 $pid_windows_x86_64 $pid_macos_aarch64 $pid_macos_x86_64 $pid_android_arm64 $pid_android_x86_64 $pid_python_pkg
 
     tar -czf dist/unsafie-cloud-linux-x86_64.tar.gz -C dist/bin unsafie-cloud-x86_64-linux
     tar -czf dist/unsafie-cloud-linux-aarch64.tar.gz -C dist/bin unsafie-cloud-aarch64-linux

@@ -1,10 +1,10 @@
 const std = @import("std");
 const client = @import("../client.zig");
 
-pub fn execute(cl: client.Client, args: []const []const u8) !void {
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
     _ = args;
-    const res = try cl.rpc("events.list", "{}");
-    defer cl.allocator.free(res);
+    const res = try api_client.rpc("events.list", "{}");
+    defer api_client.allocator.free(res);
 
     std.debug.print("[EVENT-LEDGER] Streaming verified immutable events...\n", .{});
     std.debug.print("Seq    Timestamp          Event Code  Type              Blake3 Hash Prefix\n", .{});

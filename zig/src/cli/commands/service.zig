@@ -3,8 +3,8 @@ const builtin = @import("builtin");
 const client = @import("../client.zig");
 const windows = @import("../../vpn/platform/windows.zig");
 
-pub fn execute(cl: client.Client, args: []const []const u8) !void {
-    _ = cl;
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
+    _ = api_client;
     if (args.len < 1) {
         std.debug.print("Usage: unsafie-cloud service <install|start|stop|status>\n", .{});
         return;

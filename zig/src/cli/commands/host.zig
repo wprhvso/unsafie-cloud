@@ -1,8 +1,8 @@
 const std = @import("std");
 const client = @import("../client.zig");
 
-pub fn execute(cl: client.Client, args: []const []const u8) !void {
-    _ = cl;
+pub fn execute(api_client: client.Client, args: []const []const u8) !void {
+    _ = api_client;
     _ = args;
     std.debug.print("[HOST] Applying idempotent host configuration...\n", .{});
 
