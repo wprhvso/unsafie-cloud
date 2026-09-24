@@ -23,8 +23,41 @@ pub const Config = struct {
         defer env_map.deinit();
 
         const admin_token = try allocator.dupe(u8, env_map.get("UNSAFIE_ADMIN_TOKEN") orelse "default_admin_token");
-        const state_dir = try allocator.dupe(u8, env_map.get("STATE_DIR") orelse "/var/lib/unsafie/state");
-        const storage_dir = try allocator.dupe(u8, env_map.get("STORAGE_DIR") orelse "/var/lib/unsafie/storage");
+
+        var state_buf: [256]u8 = undefined;
+        const state_dir_raw = blk: {
+            if (env_map.get("STATE_DIR")) |s| break :blk s;
+            if (std.fs.cwd().makePath("/var/lib/unsafie/state")) |_| {
+                break :blk "/var/lib/unsafie/state";
+            } else |_| {}
+            if (std.posix.getenv("HOME")) |home| {
+                const user_path = std.fmt.bufPrint(&state_buf, "{s}/.local/share/unsafie/state", .{home}) catch "/tmp/unsafie/state";
+                if (std.fs.cwd().makePath(user_path)) |_| {
+                    break :blk user_path;
+                } else |_| {}
+            }
+            std.fs.cwd().makePath("/tmp/unsafie/state") catch {};
+            break :blk "/tmp/unsafie/state";
+        };
+        const state_dir = try allocator.dupe(u8, state_dir_raw);
+
+        var storage_buf: [256]u8 = undefined;
+        const storage_dir_raw = blk: {
+            if (env_map.get("STORAGE_DIR")) |s| break :blk s;
+            if (std.fs.cwd().makePath("/var/lib/unsafie/storage")) |_| {
+                break :blk "/var/lib/unsafie/storage";
+            } else |_| {}
+            if (std.posix.getenv("HOME")) |home| {
+                const user_path = std.fmt.bufPrint(&storage_buf, "{s}/.local/share/unsafie/storage", .{home}) catch "/tmp/unsafie/storage";
+                if (std.fs.cwd().makePath(user_path)) |_| {
+                    break :blk user_path;
+                } else |_| {}
+            }
+            std.fs.cwd().makePath("/tmp/unsafie/storage") catch {};
+            break :blk "/tmp/unsafie/storage";
+        };
+        const storage_dir = try allocator.dupe(u8, storage_dir_raw);
+
         const r2_endpoint = try allocator.dupe(u8, env_map.get("R2_ENDPOINT") orelse "https://r2.cloudflarestorage.com");
         const r2_bucket = try allocator.dupe(u8, env_map.get("R2_BUCKET") orelse "infra-r2-backups");
 
