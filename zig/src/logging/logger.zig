@@ -1,5 +1,5 @@
 const std = @import("std");
-const git_state = @import("../state/git.zig");
+const db_mod = @import("../db/sqlite.zig");
 
 pub const LogLevel = enum {
     debug,
@@ -17,99 +17,114 @@ pub const LogLevel = enum {
     }
 };
 
-pub const LogEntry = struct {
-    ts: i64,
-    lvl: []const u8,
-    node: []const u8,
-    comp: []const u8,
-    msg: []const u8,
-};
-
-pub const JsonLogger = struct {
+pub const StructuredLogger = struct {
     allocator: std.mem.Allocator,
-    node_name: []const u8,
-    log_dir: []const u8,
-    git_store: ?*git_state.GitStore = null,
-    history: std.ArrayList(LogEntry),
-    pending_lines: std.ArrayList(u8),
-    last_flush: i64 = 0,
+    node_name: []const u8 = "node1",
+    db: ?*db_mod.SqliteDb = null,
+    mutex: std.Thread.Mutex = .{},
 
-    pub fn init(allocator: std.mem.Allocator, node_name: []const u8, log_dir: []const u8, git_store: ?*git_state.GitStore) JsonLogger {
+    pub fn init(allocator: std.mem.Allocator, node_name: []const u8, db: ?*db_mod.SqliteDb) StructuredLogger {
         return .{
             .allocator = allocator,
             .node_name = node_name,
-            .log_dir = log_dir,
-            .git_store = git_store,
-            .history = std.ArrayList(LogEntry){},
-            .pending_lines = std.ArrayList(u8){},
-            .last_flush = std.time.timestamp(),
+            .db = db,
+            .mutex = .{},
         };
     }
 
-    pub fn deinit(self: *JsonLogger) void {
-        for (self.history.items) |entry| {
-            self.allocator.free(entry.msg);
-        }
-        self.history.deinit(self.allocator);
-        self.pending_lines.deinit(self.allocator);
-    }
+    pub fn logTraffic(
+        self: *StructuredLogger,
+        direction: []const u8,
+        src_ip: []const u8,
+        src_port: u16,
+        dst_ip: []const u8,
+        dst_port: u16,
+        protocol: []const u8,
+        action: []const u8,
+        reason: []const u8,
+        size: u32,
+        iface: []const u8,
+    ) void {
+        const database = self.db orelse return;
+        self.mutex.lock();
+        defer self.mutex.unlock();
 
-    pub fn log(self: *JsonLogger, level: LogLevel, comp: []const u8, msg: []const u8) !void {
         const now = std.time.milliTimestamp();
+        var iso_buf = [_]u8{0} ** 32;
+        const now_s: u64 = @intCast(@divTrunc(now, 1000));
+        const iso = std.fmt.bufPrint(&iso_buf, "{d}-epoch-ms", .{now_s}) catch "";
 
-        var buf: [512]u8 = undefined;
-        const line = try std.fmt.bufPrint(&buf, "{{\"ts\":{d},\"lvl\":\"{s}\",\"node\":\"{s}\",\"comp\":\"{s}\",\"msg\":\"{s}\"}}\n", .{
-            now,
-            level.asString(),
-            self.node_name,
-            comp,
-            msg,
-        });
-
-        std.fs.cwd().makePath(self.log_dir) catch {};
-
-        const log_file_path = try std.fs.path.join(self.allocator, &[_][]const u8{ self.log_dir, "cluster.jsonl" });
-        defer self.allocator.free(log_file_path);
-
-        const file = std.fs.cwd().openFile(log_file_path, .{ .mode = .read_write }) catch |err| switch (err) {
-            error.FileNotFound => try std.fs.cwd().createFile(log_file_path, .{}),
-            else => return err,
-        };
-        defer file.close();
-        try file.seekFromEnd(0);
-        _ = try file.write(line);
-
-        const msg_copy = try self.allocator.dupe(u8, msg);
-        if (self.history.items.len >= 500) {
-            const old = self.history.orderedRemove(0);
-            self.allocator.free(old.msg);
-        }
-        try self.history.append(self.allocator, .{
+        database.insertDetailed(.{
             .ts = now,
-            .lvl = level.asString(),
-            .node = self.node_name,
-            .comp = comp,
-            .msg = msg_copy,
-        });
-
-        try self.pending_lines.appendSlice(self.allocator, line);
-
-        const cur_sec = std.time.timestamp();
-        if (cur_sec - self.last_flush >= 2 and self.pending_lines.items.len > 0) {
-            self.flushToGit();
-        }
+            .timestamp_iso = iso,
+            .node_name = self.node_name,
+            .level = "INFO",
+            .subsystem = "router",
+            .event_type = "packet_routed",
+            .direction = direction,
+            .src_ip = src_ip,
+            .src_port = src_port,
+            .dst_ip = dst_ip,
+            .dst_port = dst_port,
+            .protocol = protocol,
+            .route_action = action,
+            .route_reason = reason,
+            .packet_size_bytes = size,
+            .interface_name = iface,
+            .message = "Packet evaluated by L3 router",
+        }) catch {};
     }
 
-    fn flushToGit(self: *JsonLogger) void {
-        if (self.git_store) |gs| {
-            const rel_path = "logs/cluster.jsonl";
-            gs.commitFile(rel_path, self.pending_lines.items, "log(cluster): batch flush") catch {};
-        }
-        self.pending_lines.clearRetainingCapacity();
-        self.last_flush = std.time.timestamp();
+    pub fn logDns(
+        self: *StructuredLogger,
+        domain: []const u8,
+        qtype: []const u8,
+        is_domestic: bool,
+        resolved_ips: ?[]const u8,
+    ) void {
+        const database = self.db orelse return;
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        const now = std.time.milliTimestamp();
+        var iso_buf = [_]u8{0} ** 32;
+        const now_s: u64 = @intCast(@divTrunc(now, 1000));
+        const iso = std.fmt.bufPrint(&iso_buf, "{d}-epoch-ms", .{now_s}) catch "";
+
+        database.insertDetailed(.{
+            .ts = now,
+            .timestamp_iso = iso,
+            .node_name = self.node_name,
+            .level = "INFO",
+            .subsystem = "dns",
+            .event_type = if (is_domestic) "dns_domestic" else "dns_overseas",
+            .domain = domain,
+            .qtype = qtype,
+            .resolved_ips = resolved_ips,
+            .route_action = if (is_domestic) "direct_bypass" else "tunnel_exit",
+            .route_reason = if (is_domestic) "domestic_domain" else "foreign_domain",
+            .message = if (is_domestic) "Resolved domestic domain via direct DNS" else "Resolved foreign domain via tunnel DNS",
+        }) catch {};
     }
 
-    pub fn getRecent(self: *JsonLogger) []const LogEntry {
-        return self.history.items;
+    pub fn logSystem(self: *StructuredLogger, level: []const u8, subsystem: []const u8, event_type: []const u8, message: []const u8) void {
+        const database = self.db orelse return;
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        const now = std.time.milliTimestamp();
+        var iso_buf = [_]u8{0} ** 32;
+        const now_s: u64 = @intCast(@divTrunc(now, 1000));
+        const iso = std.fmt.bufPrint(&iso_buf, "{d}-epoch-ms", .{now_s}) catch "";
+
+        database.insertDetailed(.{
+            .ts = now,
+            .timestamp_iso = iso,
+            .node_name = self.node_name,
+            .level = level,
+            .subsystem = subsystem,
+            .event_type = event_type,
+            .message = message,
+        }) catch {};
     }
 };

@@ -17,6 +17,8 @@ const timing_wheel = @import("pacing/timing_wheel.zig");
 const bbr = @import("pacing/bbr.zig");
 const masque = @import("transport/masque.zig");
 const netlink = @import("platform/netlink.zig");
+const logger_mod = @import("../logging/logger.zig");
+const db_mod = @import("../db/sqlite.zig");
 
 pub const VpnMode = enum {
     server,
@@ -53,7 +55,8 @@ pub const VpnService = struct {
 
     tun_thread: ?std.Thread = null,
     net_thread: ?std.Thread = null,
-    stats_thread: ?std.Thread = null,
+
+    logger: ?*logger_mod.StructuredLogger = null,
 
     pub fn init(allocator: std.mem.Allocator, ifname: []const u8, subnet: []const u8) !*VpnService {
         const self = try allocator.create(VpnService);
@@ -86,10 +89,15 @@ pub const VpnService = struct {
         self.rx_bytes = std.atomic.Value(u64).init(0);
         self.tun_thread = null;
         self.net_thread = null;
-        self.stats_thread = null;
+        self.logger = null;
 
         silence_rst.BpfSilencer.silenceViaFirewall(443);
         return self;
+    }
+
+    pub fn setLogger(self: *VpnService, l: *logger_mod.StructuredLogger) void {
+        self.logger = l;
+        self.dns_server.logger = l;
     }
 
     pub fn setKeyFromToken(self: *VpnService, token: []const u8) void {
@@ -104,7 +112,9 @@ pub const VpnService = struct {
         self.running.store(true, .seq_cst);
 
         try self.dns_server.start(53);
-        self.stats_thread = try std.Thread.spawn(.{}, statsLoop, .{self});
+        if (self.logger) |lg| {
+            lg.logSystem("INFO", "vpn", "server_started", "VPN server daemon active on port 443");
+        }
     }
 
     pub fn startClient(self: *VpnService, server_endpoint: []const u8) !void {
@@ -132,7 +142,10 @@ pub const VpnService = struct {
 
         self.tun_thread = try std.Thread.spawn(.{}, clientTunLoop, .{self});
         self.net_thread = try std.Thread.spawn(.{}, clientNetLoop, .{self});
-        self.stats_thread = try std.Thread.spawn(.{}, statsLoop, .{self});
+
+        if (self.logger) |lg| {
+            lg.logSystem("INFO", "vpn", "client_connected", "VPN client active and connected");
+        }
     }
 
     pub fn stop(self: *VpnService) void {
@@ -154,11 +167,6 @@ pub const VpnService = struct {
         if (self.net_thread) |t| {
             t.join();
             self.net_thread = null;
-        }
-
-        if (self.stats_thread) |t| {
-            t.join();
-            self.stats_thread = null;
         }
     }
 
@@ -186,17 +194,15 @@ pub const VpnService = struct {
             const dst_port = if (n >= 24) std.mem.readInt(u16, read_buf[22..24][0..2], .big) else 0;
 
             const action = self.l3_router.decide(dst_ip, dst_port, false);
+            var ip_buf = [_]u8{0} ** 16;
+            const ip_str = formatIp(&ip_buf, dst_ip);
+
             switch (action) {
                 .direct => {
                     netlink.Netlink.addBypassRoute(dst_ip);
-                    std.debug.print("[TRAFFIC -> BYPASS] {d}.{d}.{d}.{d}:{d} ({d} bytes) [Domestic IP bypass]\n", .{
-                        (dst_ip >> 24) & 0xff,
-                        (dst_ip >> 16) & 0xff,
-                        (dst_ip >> 8) & 0xff,
-                        dst_ip & 0xff,
-                        dst_port,
-                        n,
-                    });
+                    if (self.logger) |lg| {
+                        lg.logTraffic("outbound", "10.42.0.2", 0, ip_str, dst_port, "IP", "direct_bypass", "domestic_rules", @intCast(n), "unsafie0");
+                    }
                     continue;
                 },
                 .drop => continue,
@@ -216,14 +222,9 @@ pub const VpnService = struct {
                     _ = self.tx_packets.fetchAdd(1, .monotonic);
                     _ = self.tx_bytes.fetchAdd(n, .monotonic);
 
-                    std.debug.print("[TRAFFIC -> TUNNEL] {d}.{d}.{d}.{d}:{d} ({d} bytes) [Encrypted MASQUE -> VPS]\n", .{
-                        (dst_ip >> 24) & 0xff,
-                        (dst_ip >> 16) & 0xff,
-                        (dst_ip >> 8) & 0xff,
-                        dst_ip & 0xff,
-                        dst_port,
-                        n,
-                    });
+                    if (self.logger) |lg| {
+                        lg.logTraffic("outbound", "10.42.0.2", 0, ip_str, dst_port, "IP", "tunnel_exit", "foreign_destination", @intCast(n), "unsafie0");
+                    }
                 },
             }
         }
@@ -253,28 +254,19 @@ pub const VpnService = struct {
             _ = self.rx_packets.fetchAdd(1, .monotonic);
             _ = self.rx_bytes.fetchAdd(res.payload_len, .monotonic);
 
-            std.debug.print("[TRAFFIC <- TUNNEL] Received {d} bytes from VPS -> written to unsafie0\n", .{res.payload_len});
+            if (self.logger) |lg| {
+                lg.logTraffic("inbound", "server", 443, "10.42.0.2", 0, "IP", "tunnel_rx", "vps_response", @intCast(res.payload_len), "unsafie0");
+            }
         }
     }
 
-    fn statsLoop(self: *VpnService) void {
-        while (self.running.load(.seq_cst)) {
-            std.Thread.sleep(5 * std.time.ns_per_s);
-            if (!self.running.load(.seq_cst)) break;
-
-            const tx_p = self.tx_packets.load(.monotonic);
-            const tx_b = self.tx_bytes.load(.monotonic) / 1024;
-            const rx_p = self.rx_packets.load(.monotonic);
-            const rx_b = self.rx_bytes.load(.monotonic) / 1024;
-
-            std.debug.print("[TUNNEL STATS] TX: {d} pkts ({d} KB) | RX: {d} pkts ({d} KB) | Mode: {s}\n", .{
-                tx_p,
-                tx_b,
-                rx_p,
-                rx_b,
-                if (self.mode == .client) "CLIENT" else "SERVER",
-            });
-        }
+    fn formatIp(buf: *[16]u8, ip: u32) []const u8 {
+        return std.fmt.bufPrint(buf, "{d}.{d}.{d}.{d}", .{
+            (ip >> 24) & 0xff,
+            (ip >> 16) & 0xff,
+            (ip >> 8) & 0xff,
+            ip & 0xff,
+        }) catch "";
     }
 };
 

@@ -10,6 +10,7 @@ const ledger = @import("ledger/engine.zig");
 const db_mod = @import("db/sqlite.zig");
 const host_mod = @import("host/provisioner.zig");
 const cli = @import("cli/main.zig");
+const logger_mod = @import("logging/logger.zig");
 
 var should_exit = std.atomic.Value(bool).init(false);
 
@@ -82,7 +83,8 @@ pub fn runDaemon(allocator: std.mem.Allocator) !void {
     var sqlite_db = try db_mod.SqliteDb.init(allocator, db_file_path);
     defer sqlite_db.deinit();
 
-    try sqlite_db.insertLog(std.time.milliTimestamp(), "node1", "INFO", "kernel", "kernel initialized with sqlite wal & fts5");
+    var logger = logger_mod.StructuredLogger.init(allocator, "server-node", sqlite_db);
+    logger.logSystem("INFO", "kernel", "daemon_start", "Unsafie Cloud Sovereign Node initialized with SQLite database logging");
 
     var ledger_engine = try ledger.LedgerEngine.init(allocator, 1, cfg.state_dir);
     defer ledger_engine.deinit();
@@ -91,10 +93,12 @@ pub fn runDaemon(allocator: std.mem.Allocator) !void {
     var vpn_service = try vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet);
     defer vpn_service.deinit();
 
+    vpn_service.setLogger(&logger);
     vpn_service.setKeyFromToken(cfg.admin_token);
     try vpn_service.startServer();
 
     var edge_server = edge.EdgeServer.init(cfg.http_port, cfg.https_port);
+    edge_server.setLogger(&logger);
     try edge_server.start(vpn_service.key, &vpn_service.tun_dev);
     defer edge_server.stop();
 
@@ -104,20 +108,15 @@ pub fn runDaemon(allocator: std.mem.Allocator) !void {
     watchdog.SystemdWatchdog.notifyReady();
     watchdog.SystemdWatchdog.notifyWatchdog();
 
-    std.debug.print("=======================================================\n", .{});
-    std.debug.print("  Unsafie Cloud Sovereign Node\n", .{});
-    std.debug.print("  Status:     ACTIVE\n", .{});
-    std.debug.print("  VPN Port:   {d} (UDP MASQUE + TCP WebSocket TLS 1.3)\n", .{cfg.https_port});
-    std.debug.print("  Interface:  {s} (10.42.0.1)\n", .{cfg.vpn_iface});
-    std.debug.print("  DNS Server: 10.42.0.1:53\n", .{});
-    std.debug.print("=======================================================\n", .{});
+    std.debug.print("Unsafie Cloud daemon active on port {d} (logs stored in {s}/unsafie.db)\n", .{ cfg.https_port, cfg.state_dir });
+    std.debug.print("Run 'unsafie-cloud logs' to inspect structured events in JSON.\n", .{});
 
     while (!should_exit.load(.seq_cst)) {
         std.Thread.sleep(1 * std.time.ns_per_s);
         watchdog.SystemdWatchdog.notifyWatchdog();
     }
 
-    std.debug.print("\n[SERVER] Stopping Unsafie Cloud daemon...\n", .{});
+    logger.logSystem("INFO", "kernel", "daemon_stop", "Unsafie Cloud daemon stopping");
     vpn_service.stop();
 }
 
@@ -127,9 +126,20 @@ pub fn runClient(allocator: std.mem.Allocator, endpoint: []const u8, token: []co
     var cfg = try config.Config.load(allocator);
     defer cfg.deinit(allocator);
 
+    std.fs.cwd().makePath(cfg.state_dir) catch {};
+
+    const db_file_path = try std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" });
+    defer allocator.free(db_file_path);
+    var sqlite_db = try db_mod.SqliteDb.init(allocator, db_file_path);
+    defer sqlite_db.deinit();
+
+    var logger = logger_mod.StructuredLogger.init(allocator, "client-node", sqlite_db);
+    logger.logSystem("INFO", "client", "connect_init", "Client starting connection to VPS");
+
     var vpn_service = try vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet);
     defer vpn_service.deinit();
 
+    vpn_service.setLogger(&logger);
     vpn_service.setKeyFromToken(token);
 
     const prov = host_mod.HostProvisioner.init(allocator);
@@ -138,18 +148,13 @@ pub fn runClient(allocator: std.mem.Allocator, endpoint: []const u8, token: []co
 
     try vpn_service.startClient(endpoint);
 
-    std.debug.print("=======================================================\n", .{});
-    std.debug.print("  Unsafie Cloud Sovereign VPN Client\n", .{});
-    std.debug.print("  Connected to: {s}\n", .{endpoint});
-    std.debug.print("  Interface:    {s} (10.42.0.2)\n", .{cfg.vpn_iface});
-    std.debug.print("  DNS proxy:    127.0.0.1:53 (active)\n", .{});
-    std.debug.print("  Routing mode: Smart Routing (Domestic direct, World via mesh)\n", .{});
-    std.debug.print("=======================================================\n", .{});
+    std.debug.print("Unsafie Cloud VPN connected to {s} (logs stored in {s}/unsafie.db)\n", .{ endpoint, cfg.state_dir });
+    std.debug.print("Run 'unsafie-cloud logs' to inspect structured events in JSON.\n", .{});
 
     while (!should_exit.load(.seq_cst)) {
         std.Thread.sleep(1 * std.time.ns_per_s);
     }
 
-    std.debug.print("\n[CLIENT] Disconnecting VPN client and restoring network...\n", .{});
+    logger.logSystem("INFO", "client", "disconnect", "Client stopping connection");
     vpn_service.stop();
 }
