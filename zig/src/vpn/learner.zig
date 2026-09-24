@@ -36,11 +36,27 @@ pub const LearnerSet = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         const now = std.time.timestamp();
+        var to_remove = std.ArrayList(u32){};
+        defer to_remove.deinit(self.allocator);
+
         var it = self.seen.iterator();
         while (it.next()) |entry| {
             if (now >= entry.value_ptr.*) {
-                _ = self.seen.remove(entry.key_ptr.*);
+                to_remove.append(self.allocator, entry.key_ptr.*) catch break;
             }
+        }
+
+        for (to_remove.items) |k| {
+            _ = self.seen.remove(k);
         }
     }
 };
+
+test "learner set lifecycle" {
+    var ls = LearnerSet.init(std.testing.allocator);
+    defer ls.deinit();
+
+    try ls.learn(0x01020304);
+    try std.testing.expect(ls.has(0x01020304));
+    try std.testing.expect(!ls.has(0x05060708));
+}

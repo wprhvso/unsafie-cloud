@@ -6,6 +6,26 @@ pub fn build(b: *std.Build) void {
 
     const is_android = target.result.abi.isAndroid();
 
+    const gen_rules_exe = b.addExecutable(.{
+        .name = "gen_rules",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/gen_rules.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
+    });
+
+    const gen_rules_cmd = b.addRunArtifact(gen_rules_exe);
+    gen_rules_cmd.addArgs(&[_][]const u8{
+        "--seed",
+        "data/rules_seed.bin",
+        "-o",
+        "src/vpn/rules.bin",
+    });
+
+    const gen_rules_step = b.step("gen-rules", "Generate rules.bin database");
+    gen_rules_step.dependOn(&gen_rules_cmd.step);
+
     if (!is_android) {
         const exe = b.addExecutable(.{
             .name = "unsafie-cloud",
@@ -15,6 +35,8 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
+
+        exe.step.dependOn(&gen_rules_cmd.step);
 
         const sqlite_dep = b.dependency("sqlite", .{});
         exe.addIncludePath(sqlite_dep.path("."));
@@ -30,6 +52,14 @@ pub fn build(b: *std.Build) void {
         });
         exe.linkLibC();
         b.installArtifact(exe);
+
+        const run_cmd = b.addRunArtifact(exe);
+        run_cmd.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_cmd.addArgs(args);
+        }
+        const run_step = b.step("run", "Run the local node / client");
+        run_step.dependOn(&run_cmd.step);
     }
 
     const lib = b.addLibrary(.{
@@ -53,6 +83,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
+        unit_tests.step.dependOn(&gen_rules_cmd.step);
         unit_tests.addIncludePath(sqlite_dep.path("."));
         unit_tests.addCSourceFile(.{
             .file = sqlite_dep.path("sqlite3.c"),
