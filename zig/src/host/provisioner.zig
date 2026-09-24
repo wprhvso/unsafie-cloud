@@ -9,11 +9,22 @@ pub const HostProvisioner = struct {
         return .{ .allocator = allocator };
     }
 
-    fn writeProc(path: []const u8, val: []const u8) void {
-        if (std.fs.openFileAbsolute(path, .{ .mode = .write_only })) |f| {
-            defer f.close();
-            f.writeAll(val) catch {};
-        } else |_| {}
+    fn writeProc(path: [*:0]const u8, val: []const u8) void {
+        const flags: std.posix.O = .{ .ACCMODE = .WRONLY };
+        const rc = std.posix.system.open(path, flags, @as(std.posix.mode_t, 0));
+        if (std.posix.errno(rc) != .SUCCESS) return;
+        const fd: std.posix.fd_t = @intCast(rc);
+        defer std.posix.close(fd);
+        _ = std.posix.write(fd, val) catch {};
+    }
+
+    fn writeFileSafe(path: [*:0]const u8, data: []const u8) void {
+        const flags: std.posix.O = .{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+        const rc = std.posix.system.open(path, flags, @as(std.posix.mode_t, 0o644));
+        if (std.posix.errno(rc) != .SUCCESS) return;
+        const fd: std.posix.fd_t = @intCast(rc);
+        defer std.posix.close(fd);
+        _ = std.posix.write(fd, data) catch {};
     }
 
     pub fn ensureSysctl(self: HostProvisioner) !void {
@@ -44,13 +55,10 @@ pub const HostProvisioner = struct {
         ;
 
         std.fs.cwd().makePath("/etc/sysctl.d") catch {};
-        const path = "/etc/sysctl.d/99-unsafie-cloud.conf";
-        if (std.fs.createFileAbsolute(path, .{})) |file| {
-            defer file.close();
-            file.writeAll(config_data) catch {};
-            var child = std.process.Child.init(&[_][]const u8{ "sysctl", "-p", path }, std.heap.page_allocator);
-            _ = child.spawnAndWait() catch {};
-        } else |_| {}
+        writeFileSafe("/etc/sysctl.d/99-unsafie-cloud.conf", config_data);
+
+        var child = std.process.Child.init(&[_][]const u8{ "sysctl", "-p", "/etc/sysctl.d/99-unsafie-cloud.conf" }, std.heap.page_allocator);
+        _ = child.spawnAndWait() catch {};
     }
 
     pub fn ensurePackages(self: HostProvisioner) !void {
@@ -178,10 +186,7 @@ pub const HostProvisioner = struct {
             \\PermitRootLogin prohibit-password
             \\
         ;
-        if (std.fs.createFileAbsolute("/etc/ssh/sshd_config.d/99-unsafie-cloud.conf", .{})) |file| {
-            defer file.close();
-            file.writeAll(conf) catch {};
-        } else |_| {}
+        writeFileSafe("/etc/ssh/sshd_config.d/99-unsafie-cloud.conf", conf);
     }
 
     pub fn ensureService(self: HostProvisioner) !void {
@@ -196,7 +201,7 @@ pub const HostProvisioner = struct {
             }
         } else |_| {}
 
-        if (is_systemd or std.fs.cwd().access("/run/systemd/system", .{}) == .{}) {
+        if (is_systemd or (std.fs.cwd().access("/run/systemd/system", .{}) catch null) != null) {
             const unit =
                 \\[Unit]
                 \\Description=Unsafie Cloud Sovereign IaaS & VPN Kernel
@@ -214,12 +219,9 @@ pub const HostProvisioner = struct {
                 \\
             ;
 
-            if (std.fs.createFileAbsolute("/etc/systemd/system/unsafie-cloud.service", .{})) |file| {
-                defer file.close();
-                file.writeAll(unit) catch {};
-                var child = std.process.Child.init(&[_][]const u8{ "systemctl", "daemon-reload" }, std.heap.page_allocator);
-                _ = child.spawnAndWait() catch {};
-            } else |_| {}
+            writeFileSafe("/etc/systemd/system/unsafie-cloud.service", unit);
+            var child = std.process.Child.init(&[_][]const u8{ "systemctl", "daemon-reload" }, std.heap.page_allocator);
+            _ = child.spawnAndWait() catch {};
         }
     }
 
