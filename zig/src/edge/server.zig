@@ -2,6 +2,7 @@ const std = @import("std");
 const listener_tcp = @import("listener_tcp.zig");
 const listener_udp = @import("listener_udp.zig");
 const tun = @import("../vpn/tun.zig");
+const logger_mod = @import("../logging/logger.zig");
 
 pub const EdgeServer = struct {
     http_port: u16,
@@ -16,6 +17,10 @@ pub const EdgeServer = struct {
             .udp_listener = listener_udp.UdpListener.init(https_port),
             .tcp_listener = listener_tcp.TcpListener.init(https_port),
         };
+    }
+
+    pub fn setLogger(self: *EdgeServer, l: *logger_mod.StructuredLogger) void {
+        self.udp_listener.logger = l;
     }
 
     pub fn start(self: *EdgeServer, key: [32]u8, tun_dev: *tun.TunDevice) !void {

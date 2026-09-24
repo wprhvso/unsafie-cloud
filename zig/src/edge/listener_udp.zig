@@ -1,6 +1,7 @@
 const std = @import("std");
 const masque = @import("../vpn/transport/masque.zig");
 const tun = @import("../vpn/tun.zig");
+const logger_mod = @import("../logging/logger.zig");
 
 pub const UdpListener = struct {
     port: u16,
@@ -11,6 +12,7 @@ pub const UdpListener = struct {
     peer_lock: std.Thread.Mutex = .{},
     key: [32]u8 = [_]u8{0} ** 32,
     tx_counter: std.atomic.Value(u64),
+    logger: ?*logger_mod.StructuredLogger = null,
 
     pub fn init(port: u16) UdpListener {
         return .{
@@ -22,6 +24,7 @@ pub const UdpListener = struct {
             .peer_lock = .{},
             .key = [_]u8{0} ** 32,
             .tx_counter = std.atomic.Value(u64).init(1),
+            .logger = null,
         };
     }
 
@@ -38,7 +41,10 @@ pub const UdpListener = struct {
         self.sock_fd = sock;
         self.running.store(true, .seq_cst);
         self.thread = try std.Thread.spawn(.{}, workerLoop, .{ self, tun_dev });
-        std.debug.print("[EDGE UDP:443] Listener started on 0.0.0.0:{d}\n", .{self.port});
+
+        if (self.logger) |lg| {
+            lg.logSystem("INFO", "edge", "udp_started", "UDP 443 listener active");
+        }
     }
 
     pub fn stop(self: *UdpListener) void {
@@ -69,7 +75,10 @@ pub const UdpListener = struct {
         const len = try masque.Masque.packSecure(self.key, ctr, 0, payload, &buf);
 
         _ = std.posix.sendto(self.sock_fd, buf[0..len], 0, &p.any, p.getOsSockLen()) catch {};
-        std.debug.print("[EDGE UDP:443] Outbound -> client ({d} bytes encrypted)\n", .{payload.len});
+
+        if (self.logger) |lg| {
+            lg.logTraffic("outbound", "server", 443, "client", 0, "MASQUE", "forward_egress", "server_to_client", @intCast(payload.len), "eth0");
+        }
     }
 
     fn workerLoop(self: *UdpListener, tun_dev: *tun.TunDevice) void {
@@ -98,7 +107,9 @@ pub const UdpListener = struct {
 
             _ = tun_dev.writePacket(plain_buf[0..res.payload_len]) catch {};
 
-            std.debug.print("[EDGE UDP:443] Inbound from client -> injected {d} bytes into server TUN\n", .{res.payload_len});
+            if (self.logger) |lg| {
+                lg.logTraffic("inbound", "client", 0, "server", 443, "MASQUE", "inject_tun", "client_to_server", @intCast(res.payload_len), "unsafie0");
+            }
         }
     }
 };
