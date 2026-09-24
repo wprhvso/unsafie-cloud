@@ -92,12 +92,27 @@ pub const SqliteDb = struct {
 
         self.allocator = allocator;
 
+        if (std.fs.path.dirname(path)) |parent| {
+            std.fs.cwd().makePath(parent) catch {};
+        }
+
         const path_z = try allocator.dupeZ(u8, path);
         defer allocator.free(path_z);
 
         var db: ?*c.sqlite3 = null;
         if (c.sqlite3_open(path_z, &db) != c.SQLITE_OK) {
-            return error.SqliteOpenFailed;
+            if (db) |d| _ = c.sqlite3_close(d);
+            db = null;
+
+            std.fs.cwd().makePath("/tmp/unsafie") catch {};
+            if (c.sqlite3_open("/tmp/unsafie/unsafie.db", &db) != c.SQLITE_OK) {
+                if (db) |d| _ = c.sqlite3_close(d);
+                db = null;
+
+                if (c.sqlite3_open(":memory:", &db) != c.SQLITE_OK) {
+                    return error.SqliteOpenFailed;
+                }
+            }
         }
         self.handle = db;
 
