@@ -73,7 +73,7 @@ pub fn execute(allocator: std.mem.Allocator, cmd: []const u8, subargs: []const [
         try cmd_quota.execute(cl, subargs);
     } else if (std.mem.eql(u8, cmd, "kernel")) {
         try cmd_kernel.execute(cl, subargs);
-    } else if (std.mem.eql(u8, cmd, "host")) {
+    } else if (std.mem.eql(u8, cmd, "host") or std.mem.eql(u8, cmd, "host-setup")) {
         try cmd_host.execute(cl, subargs);
     } else if (std.mem.eql(u8, cmd, "service")) {
         try cmd_service.execute(cl, subargs);

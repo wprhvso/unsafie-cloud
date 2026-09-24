@@ -2,9 +2,9 @@ const std = @import("std");
 const builtin = @import("builtin");
 const client = @import("../client.zig");
 const windows = @import("../../vpn/platform/windows.zig");
+const host_mod = @import("../../host/provisioner.zig");
 
 pub fn execute(cl: client.Client, args: []const []const u8) !void {
-    _ = cl;
     if (args.len < 1) {
         std.debug.print("Usage: unsafie-cloud service <install|start|stop|status>\n", .{});
         return;
@@ -17,10 +17,9 @@ pub fn execute(cl: client.Client, args: []const []const u8) !void {
             std.debug.print("[SERVICE] Windows Service 'UnsafieCloud' registered successfully.\n", .{});
         } else {
             std.debug.print("[SERVICE] Installing system service unit...\n", .{});
-            var child = std.process.Child.init(&[_][]const u8{
-                "/usr/local/bin/unsafie-cloud", "host", "bootstrap",
-            }, std.heap.page_allocator);
-            _ = child.spawnAndWait() catch {};
+            const vpn_iface = std.posix.getenv("VPN_IFACE") orelse "unsafie0";
+            const prov = host_mod.HostProvisioner.init(cl.allocator);
+            prov.bootstrapAll(vpn_iface) catch {};
             std.debug.print("[SERVICE] Linux service installed successfully.\n", .{});
         }
     } else if (std.mem.eql(u8, action, "start")) {
