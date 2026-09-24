@@ -128,10 +128,11 @@ pub const VpnService = struct {
             port = std.fmt.parseInt(u16, server_endpoint[colon + 1 ..], 10) catch 443;
         }
 
-        const resolved = std.net.Address.resolveIp(host, port) catch blk: {
-            const parsed = std.net.Address.parseIp4(host, port) catch std.net.Address.initIp4([4]u8{ 127, 0, 0, 1 }, port);
-            break :blk parsed;
-        };
+        const resolved = if (std.net.Address.parseIp4(host, port)) |addr|
+            addr
+        else |_|
+            std.net.Address.resolveIp(host, port) catch std.net.Address.initIp4([4]u8{ 127, 0, 0, 1 }, port);
+
         self.server_addr = resolved;
 
         const sock = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0);
@@ -187,7 +188,14 @@ pub const VpnService = struct {
         var out_buf: [2048]u8 = undefined;
 
         while (self.running.load(.seq_cst)) {
-            const n = self.tun_dev.readPacket(&read_buf) catch break;
+            const n = self.tun_dev.readPacket(&read_buf) catch {
+                std.Thread.sleep(20 * std.time.ns_per_ms);
+                continue;
+            };
+            if (n == 0) {
+                std.Thread.sleep(20 * std.time.ns_per_ms);
+                continue;
+            }
             if (n < 20) continue;
 
             const dst_ip = std.mem.readInt(u32, read_buf[16..20][0..4], .big);
@@ -244,7 +252,10 @@ pub const VpnService = struct {
                 0,
                 @ptrCast(&from_addr),
                 &from_len,
-            ) catch break;
+            ) catch {
+                std.Thread.sleep(20 * std.time.ns_per_ms);
+                continue;
+            };
 
             if (n < 24) continue;
 

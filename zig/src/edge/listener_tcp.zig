@@ -75,11 +75,20 @@ pub const TcpListener = struct {
             const old = self.active_client_fd.swap(client_fd, .seq_cst);
             if (old >= 0) std.posix.close(old);
 
-            self.handleClient(client_fd, tun_dev);
+            const client_thread = std.Thread.spawn(.{}, handleClientWrapper, .{ self, client_fd, tun_dev }) catch {
+                std.posix.close(client_fd);
+                continue;
+            };
+            client_thread.detach();
         }
     }
 
+    fn handleClientWrapper(self: *TcpListener, client_fd: std.posix.fd_t, tun_dev: *tun.TunDevice) void {
+        self.handleClient(client_fd, tun_dev);
+    }
+
     fn handleClient(self: *TcpListener, client_fd: std.posix.fd_t, tun_dev: *tun.TunDevice) void {
+        defer std.posix.close(client_fd);
         var recv_buf: [4096]u8 = undefined;
         var plain_buf: [2048]u8 = undefined;
 

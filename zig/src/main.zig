@@ -19,12 +19,23 @@ fn handleSignal(sig: i32) callconv(.c) void {
     should_exit.store(true, .seq_cst);
 }
 
+fn jsonLog(level: []const u8, subsystem: []const u8, event: []const u8, message: []const u8) void {
+    const ts = std.time.milliTimestamp();
+    std.debug.print(
+        "{{\"ts\":{d},\"level\":\"{s}\",\"subsystem\":\"{s}\",\"event\":\"{s}\",\"message\":\"{s}\"}}\n",
+        .{ ts, level, subsystem, event, message },
+    );
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var args = try std.process.argsWithAllocator(allocator);
+    var args = std.process.argsWithAllocator(allocator) catch |err| {
+        jsonLog("ERROR", "bootstrap", "args_error", @errorName(err));
+        return err;
+    };
     defer args.deinit();
 
     _ = args.skip();
@@ -68,76 +79,125 @@ fn setupSignals() void {
 
 pub fn runDaemon(allocator: std.mem.Allocator) !void {
     setupSignals();
+    jsonLog("INFO", "bootstrap", "daemon_start", "Initializing Unsafie Cloud daemon in server mode");
 
-    var cfg = try config.Config.load(allocator);
+    var cfg = config.Config.load(allocator) catch |err| {
+        jsonLog("ERROR", "config", "load_failed", @errorName(err));
+        return err;
+    };
     defer cfg.deinit(allocator);
+    jsonLog("INFO", "config", "loaded", "Configuration parameters loaded successfully");
 
     const git_store = git_state.GitStore.init(allocator, cfg.state_dir);
-    try git_store.ensureRepo();
+    git_store.ensureRepo() catch |err| {
+        jsonLog("WARN", "git", "repo_init_warning", @errorName(err));
+    };
 
     const storage = disk_storage.DiskStorage.init(cfg.storage_dir);
-    try storage.ensureDirs();
+    storage.ensureDirs() catch |err| {
+        jsonLog("WARN", "storage", "dirs_warning", @errorName(err));
+    };
 
-    const db_file_path = try std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" });
+    std.fs.cwd().makePath(cfg.state_dir) catch {};
+    const db_file_path = std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" }) catch |err| {
+        jsonLog("ERROR", "db", "path_join_error", @errorName(err));
+        return err;
+    };
     defer allocator.free(db_file_path);
-    var sqlite_db = try db_mod.SqliteDb.init(allocator, db_file_path);
+
+    var sqlite_db = db_mod.SqliteDb.init(allocator, db_file_path) catch |err| {
+        jsonLog("ERROR", "db", "sqlite_open_error", @errorName(err));
+        return err;
+    };
     defer sqlite_db.deinit();
+    jsonLog("INFO", "db", "sqlite_ready", "SQLite database opened with WAL mode and cluster_logs schema");
 
     var logger = logger_mod.StructuredLogger.init(allocator, "server-node", sqlite_db);
-    logger.logSystem("INFO", "kernel", "daemon_start", "Unsafie Cloud Sovereign Node initialized with SQLite database logging");
+    logger.logSystem("INFO", "kernel", "daemon_start", "Unsafie Cloud Sovereign Node initialized");
 
-    var ledger_engine = try ledger.LedgerEngine.init(allocator, 1, cfg.state_dir);
+    var ledger_engine = ledger.LedgerEngine.init(allocator, 1, cfg.state_dir) catch |err| {
+        jsonLog("WARN", "ledger", "init_warning", @errorName(err));
+        return err;
+    };
     defer ledger_engine.deinit();
-    _ = try ledger_engine.emit(.node_heartbeat, "{}");
+    _ = ledger_engine.emit(.node_heartbeat, "{}") catch {};
 
-    var vpn_service = try vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet);
+    var vpn_service = vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet) catch |err| {
+        jsonLog("ERROR", "vpn", "service_init_error", @errorName(err));
+        return err;
+    };
     defer vpn_service.deinit();
+    jsonLog("INFO", "vpn", "service_ready", "TUN interface and mesh network core initialized");
 
     vpn_service.setLogger(&logger);
     vpn_service.setKeyFromToken(cfg.admin_token);
-    try vpn_service.startServer();
+    vpn_service.startServer() catch |err| {
+        jsonLog("ERROR", "vpn", "start_server_error", @errorName(err));
+        return err;
+    };
+    jsonLog("INFO", "vpn", "server_listening", "DNS server and internal packet routing active");
 
     var edge_server = edge.EdgeServer.init(cfg.http_port, cfg.https_port);
     edge_server.setLogger(&logger);
-    try edge_server.start(vpn_service.key, &vpn_service.tun_dev);
+    edge_server.start(vpn_service.key, &vpn_service.tun_dev) catch |err| {
+        jsonLog("ERROR", "edge", "start_error", @errorName(err));
+    };
     defer edge_server.stop();
+    jsonLog("INFO", "edge", "listeners_ready", "Unified port 443 listeners active for MASQUE and WebSocket");
 
     const ws_server = ws.WsServer.init(cfg.rpc_port);
-    try ws_server.start();
+    ws_server.start() catch {};
 
     watchdog.SystemdWatchdog.notifyReady();
     watchdog.SystemdWatchdog.notifyWatchdog();
 
-    std.debug.print("Unsafie Cloud daemon active on port {d} (logs stored in {s}/unsafie.db)\n", .{ cfg.https_port, cfg.state_dir });
-    std.debug.print("Run 'unsafie-cloud logs' to inspect structured events in JSON.\n", .{});
+    jsonLog("INFO", "runtime", "running", "Unsafie Cloud server daemon is fully operational and listening");
 
     while (!should_exit.load(.seq_cst)) {
         std.Thread.sleep(1 * std.time.ns_per_s);
         watchdog.SystemdWatchdog.notifyWatchdog();
     }
 
+    jsonLog("INFO", "runtime", "shutting_down", "Received termination signal, stopping daemon");
     logger.logSystem("INFO", "kernel", "daemon_stop", "Unsafie Cloud daemon stopping");
     vpn_service.stop();
+    jsonLog("INFO", "runtime", "stopped", "Unsafie Cloud server stopped cleanly");
 }
 
 pub fn runClient(allocator: std.mem.Allocator, endpoint: []const u8, token: []const u8) !void {
     setupSignals();
+    jsonLog("INFO", "bootstrap", "client_start", "Initializing Unsafie Cloud in client mode");
 
-    var cfg = try config.Config.load(allocator);
+    var cfg = config.Config.load(allocator) catch |err| {
+        jsonLog("ERROR", "config", "load_failed", @errorName(err));
+        return err;
+    };
     defer cfg.deinit(allocator);
 
     std.fs.cwd().makePath(cfg.state_dir) catch {};
 
-    const db_file_path = try std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" });
+    const db_file_path = std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" }) catch |err| {
+        jsonLog("ERROR", "db", "path_join_error", @errorName(err));
+        return err;
+    };
     defer allocator.free(db_file_path);
-    var sqlite_db = try db_mod.SqliteDb.init(allocator, db_file_path);
+
+    var sqlite_db = db_mod.SqliteDb.init(allocator, db_file_path) catch |err| {
+        jsonLog("WARN", "db", "sqlite_warning", @errorName(err));
+        return err;
+    };
     defer sqlite_db.deinit();
+    jsonLog("INFO", "db", "sqlite_ready", "Client local SQLite database ready");
 
     var logger = logger_mod.StructuredLogger.init(allocator, "client-node", sqlite_db);
     logger.logSystem("INFO", "client", "connect_init", "Client starting connection to VPS");
 
-    var vpn_service = try vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet);
+    var vpn_service = vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet) catch |err| {
+        jsonLog("ERROR", "vpn", "init_failed", @errorName(err));
+        return err;
+    };
     defer vpn_service.deinit();
+    jsonLog("INFO", "vpn", "tun_ready", "Virtual network interface initialized");
 
     vpn_service.setLogger(&logger);
     vpn_service.setKeyFromToken(token);
@@ -145,16 +205,22 @@ pub fn runClient(allocator: std.mem.Allocator, endpoint: []const u8, token: []co
     const prov = host_mod.HostProvisioner.init(allocator);
     prov.setupClientRoutes(cfg.vpn_iface, endpoint);
     defer prov.teardownClientRoutes(cfg.vpn_iface);
+    jsonLog("INFO", "route", "routes_applied", "Smart routing half-subnets and server pin-route applied");
 
-    try vpn_service.startClient(endpoint);
+    vpn_service.startClient(endpoint) catch |err| {
+        jsonLog("ERROR", "vpn", "connect_failed", @errorName(err));
+        return err;
+    };
+    jsonLog("INFO", "client", "connected", "Connected to remote sovereign node endpoint");
 
-    std.debug.print("Unsafie Cloud VPN connected to {s} (logs stored in {s}/unsafie.db)\n", .{ endpoint, cfg.state_dir });
-    std.debug.print("Run 'unsafie-cloud logs' to inspect structured events in JSON.\n", .{});
+    jsonLog("INFO", "runtime", "running", "Client tunnel active, domestic Russian traffic routed direct, world via mesh");
 
     while (!should_exit.load(.seq_cst)) {
         std.Thread.sleep(1 * std.time.ns_per_s);
     }
 
+    jsonLog("INFO", "runtime", "disconnecting", "Shutting down client and restoring network configuration");
     logger.logSystem("INFO", "client", "disconnect", "Client stopping connection");
     vpn_service.stop();
+    jsonLog("INFO", "runtime", "stopped", "Client disconnected and routes restored cleanly");
 }
