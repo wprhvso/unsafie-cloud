@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const windows = @import("platform/windows.zig");
+const netlink = @import("platform/netlink.zig");
 
 pub const IFF_TUN: c_short = 0x0001;
 pub const IFF_NO_PI: c_short = 0x1000;
@@ -98,6 +99,9 @@ pub const TunDevice = struct {
 
         ifr.data.mtu = 1420;
         _ = std.posix.system.ioctl(sock, 0x8922, @intFromPtr(&ifr));
+
+        netlink.Netlink.setIfAddress(ifname, 0x0a2a0002, 0xffff0000) catch {};
+        netlink.Netlink.setLinkUp(ifname) catch {};
 
         _ = std.posix.system.ioctl(sock, 0x8913, @intFromPtr(&ifr));
         ifr.data.flags |= 0x0001 | 0x0040;

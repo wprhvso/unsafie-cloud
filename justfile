@@ -6,6 +6,9 @@ fix:
 run:
     cd zig && zig build run
 
+build-static:
+    cd zig && zig build -Dtarget=x86_64-linux-musl -Doptimize=ReleaseFast
+
 ci-zig-format:
     cd zig && zig fmt --check src/
 
