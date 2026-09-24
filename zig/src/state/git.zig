@@ -13,6 +13,13 @@ pub const GitStore = struct {
 
     pub fn ensureRepo(self: GitStore) !void {
         std.fs.cwd().makePath(self.repo_path) catch {};
+        const git_dir = try std.fs.path.join(self.allocator, &[_][]const u8{ self.repo_path, ".git" });
+        defer self.allocator.free(git_dir);
+
+        if (std.fs.cwd().access(git_dir, .{})) |_| {
+            return;
+        } else |_| {}
+
         var child = std.process.Child.init(&[_][]const u8{ "git", "-C", self.repo_path, "init" }, self.allocator);
         _ = child.spawnAndWait() catch {};
     }
@@ -27,7 +34,7 @@ pub const GitStore = struct {
         try std.fs.cwd().writeFile(.{ .sub_path = full_file_path, .data = content });
 
         var add_child = std.process.Child.init(&[_][]const u8{ "git", "-C", self.repo_path, "add", rel_path }, self.allocator);
-        _ = try add_child.spawnAndWait();
+        _ = add_child.spawnAndWait() catch {};
 
         var commit_child = std.process.Child.init(&[_][]const u8{ "git", "-C", self.repo_path, "commit", "-m", message }, self.allocator);
         _ = commit_child.spawnAndWait() catch {};

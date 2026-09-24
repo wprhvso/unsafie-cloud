@@ -319,12 +319,12 @@ pub const Netlink = struct {
 
         var vpn_idx: i32 = -1;
         var attempts: usize = 0;
-        while (attempts < 60) : (attempts += 1) {
+        while (attempts < 10) : (attempts += 1) {
             if (getIfIndex(vpn_ifname)) |idx| {
                 vpn_idx = idx;
                 break;
             }
-            std.Thread.sleep(50 * std.time.ns_per_ms);
+            std.Thread.sleep(20 * std.time.ns_per_ms);
         }
 
         if (vpn_idx <= 0) {
@@ -390,9 +390,6 @@ pub const Netlink = struct {
         } else |_| {
             std.debug.print("[DNS WARN] Could not overwrite /etc/resolv.conf directly, trying resolvectl...\n", .{});
         }
-
-        var child = std.process.Child.init(&[_][]const u8{ "resolvectl", "dns", "unsafie0", "127.0.0.1" }, std.heap.page_allocator);
-        _ = child.spawnAndWait() catch {};
     }
 
     fn restoreDnsOverride() void {

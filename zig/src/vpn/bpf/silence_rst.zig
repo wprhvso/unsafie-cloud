@@ -50,7 +50,7 @@ pub const BpfSilencer = struct {
         const port_str = std.fmt.bufPrint(&port_buf, "{d}", .{port}) catch return;
 
         var child = std.process.Child.init(&[_][]const u8{
-            "iptables", "-I", "OUTPUT", "-p", "tcp", "--tcp-flags", "RST", "RST", "--sport", port_str, "-j", "DROP",
+            "iptables", "-w", "1", "-I", "OUTPUT", "-p", "tcp", "--tcp-flags", "RST", "RST", "--sport", port_str, "-j", "DROP",
         }, std.heap.page_allocator);
         _ = child.spawnAndWait() catch {};
 
