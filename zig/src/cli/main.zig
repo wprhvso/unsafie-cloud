@@ -25,21 +25,22 @@ pub fn printHelp() void {
         \\Usage: unsafie-cloud <command> [subcommand] [flags]
         \\
         \\Commands:
-        \\  run          Run node and mesh VPN daemon locally
+        \\  run          Run sovereign node daemon and 443 listener
+        \\  connect      Connect client to sovereign VPN endpoint (--token <tok>)
         \\  auth         Authentication management (login, status, logout)
-        \\  vm           Virtual machine lifecycle (ensure, list, get, delete, bake, ssh, logs)
+        \\  service      Cross-platform service management (install, start, stop, status)
+        \\  host         Idempotent host provisioning and sysctl/firewall setup
+        \\  node         Cluster nodes and mesh bootstrap (add, list, status)
+        \\  token        API token minting and revocation (create, list, revoke)
+        \\  vm           Virtual machine lifecycle (ensure, list, get, delete, bake)
         \\  iso          ISO image management (ensure, list, delete)
         \\  image        Custom baked QCOW2 image catalog (list, delete)
-        \\  domain       Custom domain mapping and manual PEM SSL (ensure, list, delete)
-        \\  port         L4 TCP/UDP port forwarding (ensure, list, delete)
-        \\  node         Cluster nodes and viral SSH bootstrap (add, list, status)
-        \\  token        API token minting and revocation (create, list, revoke)
-        \\  quota        User resource quotas and whitelist grants (get, set, grant)
-        \\  kernel       Zero-downtime A/B kernel rollout (status, upgrade)
-        \\  host         Idempotent host provisioning and sysctl/firewall setup (bootstrap, setup)
-        \\  service      Cross-platform service management (install, start, stop, status)
-        \\  events       Immutable event ledger stream (list, tail, audit)
-        \\  logs         Cluster-wide JSONL structured logs (tail, filter)
+        \\  domain       Custom domain mapping and manual PEM SSL
+        \\  port         L4 TCP/UDP port forwarding
+        \\  quota        User resource quotas and whitelist grants
+        \\  kernel       Zero-downtime A/B kernel rollout
+        \\  events       Immutable event ledger stream
+        \\  logs         Cluster-wide JSONL structured logs
         \\  top          Interactive live terminal TUI dashboard
         \\  completion   Shell completions generator (bash, zsh, fish)
         \\
@@ -85,6 +86,6 @@ pub fn execute(allocator: std.mem.Allocator, cmd: []const u8, subargs: []const [
     } else if (std.mem.eql(u8, cmd, "completion")) {
         try cmd_completion.execute(subargs);
     } else {
-        std.debug.print("Unknown command: {s}\nRun 'unsafie-cloud' without arguments for help.\n", .{cmd});
+        std.debug.print("Unknown command: {s}\nRun unsafie-cloud help for available commands.\n", .{cmd});
     }
 }

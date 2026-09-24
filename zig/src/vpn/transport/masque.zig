@@ -110,4 +110,63 @@ pub const Masque = struct {
             .payload = in[offset..],
         };
     }
+
+    pub fn packSecure(key: [32]u8, nonce_counter: u64, context_id: u64, payload: []const u8, out: []u8) !usize {
+        if (out.len < 24 + 16 + payload.len) return error.BufferTooSmall;
+
+        var plain_buf: [2048]u8 = undefined;
+        const plain_len = try packDatagram(context_id, payload, &plain_buf);
+
+        std.mem.writeInt(u64, out[0..8][0..8], nonce_counter, .little);
+
+        var nonce = [_]u8{0} ** 12;
+        std.mem.writeInt(u64, nonce[4..12][0..8], nonce_counter, .little);
+
+        var tag: [16]u8 = undefined;
+        std.crypto.aead.chacha_poly.ChaCha20Poly1305.encrypt(out[24 .. 24 + plain_len], &tag, plain_buf[0..plain_len], out[0..8], nonce, key);
+        @memcpy(out[8..24], &tag);
+
+        return 24 + plain_len;
+    }
+
+    pub fn unpackSecure(key: [32]u8, in: []const u8, out: []u8) !struct { context_id: u64, payload_len: usize } {
+        if (in.len < 24) return error.PacketTooShort;
+
+        const nonce_counter = std.mem.readInt(u64, in[0..8][0..8], .little);
+        var tag: [16]u8 = undefined;
+        @memcpy(&tag, in[8..24]);
+
+        var nonce = [_]u8{0} ** 12;
+        std.mem.writeInt(u64, nonce[4..12][0..8], nonce_counter, .little);
+
+        var plain_buf: [2048]u8 = undefined;
+        const cipher = in[24..];
+        if (plain_buf.len < cipher.len) return error.BufferTooSmall;
+
+        try std.crypto.aead.chacha_poly.ChaCha20Poly1305.decrypt(plain_buf[0..cipher.len], cipher, tag, in[0..8], nonce, key);
+        const unpacked = try unpackDatagram(plain_buf[0..cipher.len]);
+
+        if (out.len < unpacked.payload.len) return error.BufferTooSmall;
+        @memcpy(out[0..unpacked.payload.len], unpacked.payload);
+
+        return .{
+            .context_id = unpacked.context_id,
+            .payload_len = unpacked.payload.len,
+        };
+    }
 };
+
+test "masque secure datagram roundtrip" {
+    const key = [_]u8{0x42} ** 32;
+    const test_payload = "test-ip-packet-content";
+    var packet_buf: [512]u8 = undefined;
+
+    const enc_len = try Masque.packSecure(key, 101, 0, test_payload, &packet_buf);
+    try std.testing.expect(enc_len > test_payload.len);
+
+    var dec_buf: [512]u8 = undefined;
+    const res = try Masque.unpackSecure(key, packet_buf[0..enc_len], &dec_buf);
+
+    try std.testing.expectEqual(@as(u64, 0), res.context_id);
+    try std.testing.expectEqualStrings(test_payload, dec_buf[0..res.payload_len]);
+}

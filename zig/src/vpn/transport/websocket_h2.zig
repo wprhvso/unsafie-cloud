@@ -81,8 +81,7 @@ pub const WebSocketH2 = struct {
             offset += 3;
         } else {
             out[offset] = if (is_client) 0x80 | 127 else 127;
-            const dest_slice: *[8]u8 = out[offset + 1 .. offset + 9][0..8];
-            std.mem.writeInt(u64, dest_slice, payload.len, .big);
+            std.mem.writeInt(u64, out[offset + 1 .. offset + 9][0..8], payload.len, .big);
             offset += 9;
         }
 
@@ -112,8 +111,7 @@ pub const WebSocketH2 = struct {
             offset = 4;
         } else if (len_val == 127) {
             if (in.len < 10) return error.UnexpectedEof;
-            const src_slice: *const [8]u8 = in[2..10][0..8];
-            len_val = @intCast(std.mem.readInt(u64, src_slice, .big));
+            len_val = @intCast(std.mem.readInt(u64, in[2..10][0..8], .big));
             offset = 10;
         }
 
@@ -133,4 +131,67 @@ pub const WebSocketH2 = struct {
 
         return len_val;
     }
+
+    pub fn packSecureWs(key: [32]u8, nonce_counter: u64, payload: []const u8, is_client: bool, out: []u8) !usize {
+        var enc_payload: [2048]u8 = undefined;
+        if (enc_payload.len < 24 + payload.len) return error.BufferTooSmall;
+
+        std.mem.writeInt(u64, enc_payload[0..8][0..8], nonce_counter, .little);
+        var nonce = [_]u8{0} ** 12;
+        std.mem.writeInt(u64, nonce[4..12][0..8], nonce_counter, .little);
+
+        var tag: [16]u8 = undefined;
+        std.crypto.aead.chacha_poly.ChaCha20Poly1305.encrypt(
+            enc_payload[24 .. 24 + payload.len],
+            &tag,
+            payload,
+            enc_payload[0..8],
+            nonce,
+            key,
+        );
+        @memcpy(enc_payload[8..24], &tag);
+
+        return try packWsBinary(enc_payload[0 .. 24 + payload.len], is_client, out);
+    }
+
+    pub fn unpackSecureWs(key: [32]u8, in: []const u8, out: []u8) !usize {
+        var raw_ws: [2048]u8 = undefined;
+        const ws_len = try unpackWsBinary(in, &raw_ws);
+        if (ws_len < 24) return error.PacketTooShort;
+
+        const nonce_counter = std.mem.readInt(u64, raw_ws[0..8][0..8], .little);
+        var tag: [16]u8 = undefined;
+        @memcpy(&tag, raw_ws[8..24]);
+
+        var nonce = [_]u8{0} ** 12;
+        std.mem.writeInt(u64, nonce[4..12][0..8], nonce_counter, .little);
+
+        const cipher = raw_ws[24..ws_len];
+        if (out.len < cipher.len) return error.BufferTooSmall;
+
+        try std.crypto.aead.chacha_poly.ChaCha20Poly1305.decrypt(
+            out[0..cipher.len],
+            cipher,
+            tag,
+            raw_ws[0..8],
+            nonce,
+            key,
+        );
+
+        return cipher.len;
+    }
 };
+
+test "websocket h2 secure pack and unpack" {
+    const key = [_]u8{0x55} ** 32;
+    const test_packet = "sample-raw-ip-packet-443";
+    var frame_buf: [1024]u8 = undefined;
+
+    const frame_len = try WebSocketH2.packSecureWs(key, 42, test_packet, true, &frame_buf);
+    try std.testing.expect(frame_len > test_packet.len);
+
+    var dec_buf: [1024]u8 = undefined;
+    const dec_len = try WebSocketH2.unpackSecureWs(key, frame_buf[0..frame_len], &dec_buf);
+
+    try std.testing.expectEqualStrings(test_packet, dec_buf[0..dec_len]);
+}
