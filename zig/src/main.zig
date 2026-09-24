@@ -1,22 +1,26 @@
 const std = @import("std");
-const config = @import("config.zig");
-const git_state = @import("state/git.zig");
-const disk_storage = @import("storage/disk.zig");
-const edge = @import("edge/server.zig");
-const ws = @import("ws/server.zig");
-const watchdog = @import("cluster/watchdog.zig");
-const vpn = @import("vpn/service.zig");
-const ledger = @import("ledger/engine.zig");
-const db_mod = @import("db/sqlite.zig");
-const host_mod = @import("host/provisioner.zig");
-const cli = @import("cli/main.zig");
-const logger_mod = @import("logging/logger.zig");
+const config_mod = @import("config.zig");
+const engine_mod = @import("amnezia/engine.zig");
+const protocol_mod = @import("amnezia/protocol.zig");
+const router_mod = @import("routing/router.zig");
+const learner_mod = @import("routing/learner.zig");
+const sync_mod = @import("sync/mesh_sync.zig");
 
 var should_exit = std.atomic.Value(bool).init(false);
 
 fn handleSignal(sig: i32) callconv(.c) void {
     _ = sig;
     should_exit.store(true, .seq_cst);
+}
+
+fn setupSignals() void {
+    const act = std.posix.Sigaction{
+        .handler = .{ .handler = handleSignal },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(std.posix.SIG.INT, &act, null);
+    std.posix.sigaction(std.posix.SIG.TERM, &act, null);
 }
 
 fn jsonLog(level: []const u8, subsystem: []const u8, event: []const u8, message: []const u8) void {
@@ -32,195 +36,175 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var args = std.process.argsWithAllocator(allocator) catch |err| {
-        jsonLog("ERROR", "bootstrap", "args_error", @errorName(err));
-        return err;
-    };
+    var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
 
     _ = args.skip();
-    if (args.next()) |cmd| {
-        if (std.mem.eql(u8, cmd, "run") or std.mem.eql(u8, cmd, "daemon") or std.mem.eql(u8, cmd, "server")) {
-            return runDaemon(allocator);
-        } else if (std.mem.eql(u8, cmd, "connect")) {
-            const endpoint = args.next() orelse "127.0.0.1:443";
-            var token: []const u8 = "default_admin_token";
-            while (args.next()) |opt| {
-                if (std.mem.eql(u8, opt, "--token") or std.mem.eql(u8, opt, "-t")) {
-                    if (args.next()) |t| token = t;
-                }
-            }
-            return runClient(allocator, endpoint, token);
-        } else if (std.mem.eql(u8, cmd, "help") or std.mem.eql(u8, cmd, "--help") or std.mem.eql(u8, cmd, "-h")) {
-            cli.printHelp();
+    var config_path: []const u8 = "unsafie.yaml";
+    if (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
+            std.debug.print("Usage: unsafie [path/to/unsafie.yaml]\n", .{});
             return;
-        } else {
-            var subargs = std.ArrayList([]const u8){};
-            defer subargs.deinit(allocator);
-            while (args.next()) |arg| {
-                try subargs.append(allocator, arg);
-            }
-            return cli.execute(allocator, cmd, subargs.items);
         }
+        config_path = arg;
     }
 
-    return runDaemon(allocator);
-}
-
-fn setupSignals() void {
-    const act = std.posix.Sigaction{
-        .handler = .{ .handler = handleSignal },
-        .mask = std.posix.sigemptyset(),
-        .flags = 0,
-    };
-    std.posix.sigaction(std.posix.SIG.INT, &act, null);
-    std.posix.sigaction(std.posix.SIG.TERM, &act, null);
-}
-
-pub fn runDaemon(allocator: std.mem.Allocator) !void {
     setupSignals();
-    jsonLog("INFO", "bootstrap", "daemon_start", "Initializing Unsafie Cloud daemon in server mode");
+    jsonLog("INFO", "bootstrap", "starting", "Initializing unsafie in-memory node");
 
-    var cfg = config.Config.load(allocator) catch |err| {
+    const cfg = config_mod.loadFromFile(allocator, config_path) catch |err| {
         jsonLog("ERROR", "config", "load_failed", @errorName(err));
         return err;
     };
-    defer cfg.deinit(allocator);
-    jsonLog("INFO", "config", "loaded", "Configuration parameters loaded successfully");
+    jsonLog("INFO", "config", "loaded", "Configuration loaded into memory");
 
-    const git_store = git_state.GitStore.init(allocator, cfg.state_dir);
-    git_store.ensureRepo() catch |err| {
-        jsonLog("WARN", "git", "repo_init_warning", @errorName(err));
-    };
-
-    const storage = disk_storage.DiskStorage.init(cfg.storage_dir);
-    storage.ensureDirs() catch |err| {
-        jsonLog("WARN", "storage", "dirs_warning", @errorName(err));
-    };
-
-    std.fs.cwd().makePath(cfg.state_dir) catch {};
-    const db_file_path = std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" }) catch |err| {
-        jsonLog("ERROR", "db", "path_join_error", @errorName(err));
+    var engine = engine_mod.AmneziaEngine.init(allocator, config_path, cfg) catch |err| {
+        jsonLog("ERROR", "amnezia", "init_failed", @errorName(err));
         return err;
     };
-    defer allocator.free(db_file_path);
+    defer engine.deinit();
 
-    var sqlite_db = db_mod.SqliteDb.init(allocator, db_file_path) catch |err| {
-        jsonLog("ERROR", "db", "sqlite_open_error", @errorName(err));
+    engine.start() catch |err| {
+        jsonLog("ERROR", "amnezia", "start_failed", @errorName(err));
         return err;
     };
-    defer sqlite_db.deinit();
-    jsonLog("INFO", "db", "sqlite_ready", "SQLite database opened with WAL mode and cluster_logs schema");
-
-    var logger = logger_mod.StructuredLogger.init(allocator, "server-node", sqlite_db);
-    logger.logSystem("INFO", "kernel", "daemon_start", "Unsafie Cloud Sovereign Node initialized");
-
-    var ledger_engine = ledger.LedgerEngine.init(allocator, 1, cfg.state_dir) catch |err| {
-        jsonLog("WARN", "ledger", "init_warning", @errorName(err));
-        return err;
-    };
-    defer ledger_engine.deinit();
-    _ = ledger_engine.emit(.node_heartbeat, "{}") catch {};
-
-    var vpn_service = vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet) catch |err| {
-        jsonLog("ERROR", "vpn", "service_init_error", @errorName(err));
-        return err;
-    };
-    defer vpn_service.deinit();
-    jsonLog("INFO", "vpn", "service_ready", "TUN interface and mesh network core initialized");
-
-    vpn_service.setLogger(&logger);
-    vpn_service.setKeyFromToken(cfg.admin_token);
-    vpn_service.startServer() catch |err| {
-        jsonLog("ERROR", "vpn", "start_server_error", @errorName(err));
-        return err;
-    };
-    jsonLog("INFO", "vpn", "server_listening", "DNS server and internal packet routing active");
-
-    var edge_server = edge.EdgeServer.init(cfg.http_port, cfg.https_port);
-    edge_server.setLogger(&logger);
-    edge_server.start(vpn_service.key, &vpn_service.tun_dev) catch |err| {
-        jsonLog("ERROR", "edge", "start_error", @errorName(err));
-    };
-    defer edge_server.stop();
-    jsonLog("INFO", "edge", "listeners_ready", "Unified port 443 listeners active for MASQUE and WebSocket");
-
-    const ws_server = ws.WsServer.init(cfg.rpc_port);
-    ws_server.start() catch {};
-
-    watchdog.SystemdWatchdog.notifyReady();
-    watchdog.SystemdWatchdog.notifyWatchdog();
-
-    jsonLog("INFO", "runtime", "running", "Unsafie Cloud server daemon is fully operational and listening");
+    jsonLog("INFO", "amnezia", "running", "AmneziaWG node active with in-memory state and smart routing");
 
     while (!should_exit.load(.seq_cst)) {
-        std.Thread.sleep(1 * std.time.ns_per_s);
-        watchdog.SystemdWatchdog.notifyWatchdog();
+        std.Thread.sleep(100 * std.time.ns_per_ms);
     }
 
-    jsonLog("INFO", "runtime", "shutting_down", "Received termination signal, stopping daemon");
-    logger.logSystem("INFO", "kernel", "daemon_stop", "Unsafie Cloud daemon stopping");
-    vpn_service.stop();
-    jsonLog("INFO", "runtime", "stopped", "Unsafie Cloud server stopped cleanly");
+    jsonLog("INFO", "bootstrap", "stopping", "Stopping unsafie node");
+    engine.stop();
+    jsonLog("INFO", "bootstrap", "stopped", "Unsafie stopped cleanly");
 }
 
-pub fn runClient(allocator: std.mem.Allocator, endpoint: []const u8, token: []const u8) !void {
-    setupSignals();
-    jsonLog("INFO", "bootstrap", "client_start", "Initializing Unsafie Cloud in client mode");
+test "config roundtrip" {
+    const sample =
+        \\metadata:
+        \\  version: 1
+        \\  timestamp: 1727210000
+        \\  updated_by: "test-node"
+        \\
+        \\node:
+        \\  name: "test-node"
+        \\  role: "admin"
+        \\  listen_port: 51820
+        \\  vpn_ip: "10.42.0.1"
+        \\
+        \\amnezia:
+        \\  jc: 4
+        \\  jmin: 40
+        \\  jmax: 70
+        \\  s1: 64
+        \\  s2: 48
+        \\  h1: 1287634912
+        \\  h2: 837194625
+        \\  h3: 1092837465
+        \\  h4: 1982736450
+        \\  psk: "test_psk"
+        \\
+        \\roles:
+        \\  - name: "admin"
+        \\    permissions:
+        \\      - "sync_config"
+        \\      - "route_all"
+        \\
+        \\peers:
+        \\  - name: "peer1"
+        \\    role: "client"
+        \\    public_key: "abc123"
+        \\    endpoint: "1.2.3.4:51820"
+        \\    can_sync_config: false
+        \\    persistent_keepalive: 25
+        \\    allowed_ips:
+        \\      - "10.42.0.2/32"
+        \\
+        \\routing:
+        \\  default_action: "tunnel"
+        \\  direct_domains:
+        \\    - "*.ru"
+        \\  direct_cidrs:
+        \\    - "10.0.0.0/8"
+        \\  blocked_domains:
+        \\    - "ads.example.com"
+        \\  routed_domains:
+        \\    - "*.internal"
+        \\
+        \\dns:
+        \\  listen: "10.42.0.1:53"
+        \\  upstreams:
+        \\    - "1.1.1.1:53"
+        \\  hosts:
+        \\    - name: "node1.internal"
+        \\      ip: "10.42.0.1"
+    ;
 
-    var cfg = config.Config.load(allocator) catch |err| {
-        jsonLog("ERROR", "config", "load_failed", @errorName(err));
-        return err;
+    var cfg1 = try config_mod.parseYaml(std.testing.allocator, sample);
+    defer cfg1.deinit();
+
+    var buf = std.ArrayList(u8){};
+    defer buf.deinit(std.testing.allocator);
+    try cfg1.serialize(buf.writer(std.testing.allocator));
+
+    var cfg2 = try config_mod.parseYaml(std.testing.allocator, buf.items);
+    defer cfg2.deinit();
+
+    try std.testing.expectEqual(cfg1.metadata.version, cfg2.metadata.version);
+    try std.testing.expectEqual(cfg1.metadata.timestamp, cfg2.metadata.timestamp);
+    try std.testing.expectEqualStrings(cfg1.node.name, cfg2.node.name);
+    try std.testing.expectEqual(cfg1.amnezia.h1, cfg2.amnezia.h1);
+    try std.testing.expectEqual(cfg1.roles.len, cfg2.roles.len);
+    try std.testing.expectEqual(cfg1.peers.len, cfg2.peers.len);
+}
+
+test "amnezia packet identification" {
+    const params = protocol_mod.AmneziaParams{
+        .h1 = 0x11111111,
+        .h2 = 0x22222222,
+        .h3 = 0x33333333,
+        .h4 = 0x44444444,
     };
-    defer cfg.deinit(allocator);
 
-    std.fs.cwd().makePath(cfg.state_dir) catch {};
+    var h1_bytes: [4]u8 = undefined;
+    std.mem.writeInt(u32, &h1_bytes, 0x11111111, .little);
+    try std.testing.expectEqual(protocol_mod.PacketType.handshake_init, protocol_mod.identifyPacket(h1_bytes, params));
 
-    const db_file_path = std.fs.path.join(allocator, &[_][]const u8{ cfg.state_dir, "unsafie.db" }) catch |err| {
-        jsonLog("ERROR", "db", "path_join_error", @errorName(err));
-        return err;
-    };
-    defer allocator.free(db_file_path);
+    var h4_bytes: [4]u8 = undefined;
+    std.mem.writeInt(u32, &h4_bytes, 0x44444444, .little);
+    try std.testing.expectEqual(protocol_mod.PacketType.transport_data, protocol_mod.identifyPacket(h4_bytes, params));
 
-    var sqlite_db = db_mod.SqliteDb.init(allocator, db_file_path) catch |err| {
-        jsonLog("WARN", "db", "sqlite_warning", @errorName(err));
-        return err;
-    };
-    defer sqlite_db.deinit();
-    jsonLog("INFO", "db", "sqlite_ready", "Client local SQLite database ready");
+    var sync_bytes: [4]u8 = undefined;
+    std.mem.writeInt(u32, &sync_bytes, protocol_mod.SYNC_MAGIC, .little);
+    try std.testing.expectEqual(protocol_mod.PacketType.mesh_sync, protocol_mod.identifyPacket(sync_bytes, params));
+}
 
-    var logger = logger_mod.StructuredLogger.init(allocator, "client-node", sqlite_db);
-    logger.logSystem("INFO", "client", "connect_init", "Client starting connection to VPS");
+test "smart router decisions" {
+    var learner = learner_mod.LearnerSet.init(std.testing.allocator);
+    defer learner.deinit();
 
-    var vpn_service = vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet) catch |err| {
-        jsonLog("ERROR", "vpn", "init_failed", @errorName(err));
-        return err;
-    };
-    defer vpn_service.deinit();
-    jsonLog("INFO", "vpn", "tun_ready", "Virtual network interface initialized");
+    var router = router_mod.SmartRouter.init(std.testing.allocator, &learner, "tunnel", "10.42.0.0/16");
+    defer router.deinit();
 
-    vpn_service.setLogger(&logger);
-    vpn_service.setKeyFromToken(token);
+    try router.addDirectCidr("192.168.0.0/16");
+    try router.addDirectDomain("*.ru");
+    try router.addBlockedDomain("adservice.google.com");
 
-    const prov = host_mod.HostProvisioner.init(allocator);
-    prov.setupClientRoutes(cfg.vpn_iface, endpoint);
-    defer prov.teardownClientRoutes(cfg.vpn_iface);
-    jsonLog("INFO", "route", "routes_applied", "Smart routing half-subnets and server pin-route applied");
+    const r_direct_cidr = router.decide(router_mod.parseIpv4("192.168.1.1").?, null);
+    try std.testing.expectEqual(router_mod.RouteAction.direct, r_direct_cidr);
 
-    vpn_service.startClient(endpoint) catch |err| {
-        jsonLog("ERROR", "vpn", "connect_failed", @errorName(err));
-        return err;
-    };
-    jsonLog("INFO", "client", "connected", "Connected to remote sovereign node endpoint");
+    const r_blocked = router.decide(router_mod.parseIpv4("8.8.8.8").?, "adservice.google.com");
+    try std.testing.expectEqual(router_mod.RouteAction.drop, r_blocked);
 
-    jsonLog("INFO", "runtime", "running", "Client tunnel active, domestic Russian traffic routed direct, world via mesh");
+    const r_ru = router.decide(router_mod.parseIpv4("77.88.55.55").?, "yandex.ru");
+    try std.testing.expectEqual(router_mod.RouteAction.direct, r_ru);
 
-    while (!should_exit.load(.seq_cst)) {
-        std.Thread.sleep(1 * std.time.ns_per_s);
-    }
+    const r_ru_learned = router.decide(router_mod.parseIpv4("77.88.55.55").?, null);
+    try std.testing.expectEqual(router_mod.RouteAction.direct, r_ru_learned);
 
-    jsonLog("INFO", "runtime", "disconnecting", "Shutting down client and restoring network configuration");
-    logger.logSystem("INFO", "client", "disconnect", "Client stopping connection");
-    vpn_service.stop();
-    jsonLog("INFO", "runtime", "stopped", "Client disconnected and routes restored cleanly");
+    const r_mesh_internal = router.decide(router_mod.parseIpv4("10.42.0.5").?, null);
+    try std.testing.expectEqual(router_mod.RouteAction.mesh, r_mesh_internal);
+
+    const r_foreign = router.decide(router_mod.parseIpv4("1.1.1.1").?, "foreign.com");
+    try std.testing.expectEqual(router_mod.RouteAction.mesh, r_foreign);
 }

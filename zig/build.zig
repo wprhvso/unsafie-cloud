@@ -3,32 +3,11 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-
     const is_android = target.result.abi.isAndroid();
-
-    const gen_rules_exe = b.addExecutable(.{
-        .name = "gen_rules",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("tools/gen_rules.zig"),
-            .target = b.graph.host,
-            .optimize = .Debug,
-        }),
-    });
-
-    const gen_rules_cmd = b.addRunArtifact(gen_rules_exe);
-    gen_rules_cmd.addArgs(&[_][]const u8{
-        "--seed",
-        "data/rules_seed.bin",
-        "-o",
-        "src/vpn/rules.bin",
-    });
-
-    const gen_rules_step = b.step("gen-rules", "Generate rules.bin database");
-    gen_rules_step.dependOn(&gen_rules_cmd.step);
 
     if (!is_android) {
         const exe = b.addExecutable(.{
-            .name = "unsafie-cloud",
+            .name = "unsafie",
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/main.zig"),
                 .target = target,
@@ -36,21 +15,6 @@ pub fn build(b: *std.Build) void {
             }),
         });
 
-        exe.step.dependOn(&gen_rules_cmd.step);
-
-        const sqlite_dep = b.dependency("sqlite", .{});
-        exe.addIncludePath(sqlite_dep.path("."));
-        exe.addCSourceFile(.{
-            .file = sqlite_dep.path("sqlite3.c"),
-            .flags = &[_][]const u8{
-                "-DSQLITE_ENABLE_FTS5",
-                "-DSQLITE_ENABLE_RTREE",
-                "-DSQLITE_THREADSAFE=1",
-                "-DSQLITE_ENABLE_JSON1",
-                "-DSQLITE_OMIT_LOAD_EXTENSION",
-            },
-        });
-        exe.linkLibC();
         b.installArtifact(exe);
 
         const run_cmd = b.addRunArtifact(exe);
@@ -58,24 +22,9 @@ pub fn build(b: *std.Build) void {
         if (b.args) |args| {
             run_cmd.addArgs(args);
         }
-        const run_step = b.step("run", "Run the local node / client");
+        const run_step = b.step("run", "Run unsafie");
         run_step.dependOn(&run_cmd.step);
-    }
 
-    const lib = b.addLibrary(.{
-        .linkage = .dynamic,
-        .name = "unsafie_core",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/vpn/platform/android.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    b.installArtifact(lib);
-
-    if (!is_android) {
-        const sqlite_dep = b.dependency("sqlite", .{});
-        const test_step = b.step("test", "Run tests");
         const unit_tests = b.addTest(.{
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/main.zig"),
@@ -83,20 +32,19 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
-        unit_tests.step.dependOn(&gen_rules_cmd.step);
-        unit_tests.addIncludePath(sqlite_dep.path("."));
-        unit_tests.addCSourceFile(.{
-            .file = sqlite_dep.path("sqlite3.c"),
-            .flags = &[_][]const u8{
-                "-DSQLITE_ENABLE_FTS5",
-                "-DSQLITE_ENABLE_RTREE",
-                "-DSQLITE_THREADSAFE=1",
-                "-DSQLITE_ENABLE_JSON1",
-                "-DSQLITE_OMIT_LOAD_EXTENSION",
-            },
-        });
-        unit_tests.linkLibC();
         const run_unit_tests = b.addRunArtifact(unit_tests);
+        const test_step = b.step("test", "Run unit tests");
         test_step.dependOn(&run_unit_tests.step);
     }
+
+    const lib = b.addLibrary(.{
+        .linkage = .dynamic,
+        .name = "unsafie_core",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/android.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    b.installArtifact(lib);
 }

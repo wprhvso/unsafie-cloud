@@ -1,80 +1,24 @@
-# Unsafie Cloud (`wprhvso/unsafie-cloud`)
+# Unsafie Cloud (wprhvso/unsafie-cloud)
 
-High-performance, zero-quorum Sovereign Private Cloud IaaS Kernel, Multi-Hop Mesh VPN, and Edge Gateway written in Zig 0.15.
+High-performance, pure in-memory Mesh VPN and Sovereign Private Cloud Kernel powered by AmneziaWG in Zig 0.15.
 
-## Installation
+## Architecture Highlights
 
-### Linux & macOS (One-line installer)
+- **Pure In-Memory State (RAM):** Completely eliminates SQLite, PostgreSQL, disk ledgers, and databases. All routes, peer sessions, DNS caches, and telemetry live exclusively in memory.
+- **Single Sacred Configuration (`unsafie.yaml`):** The entire system state—including identities, secret keys, AmneziaWG obfuscation headers, peer topologies, RBAC roles, and smart routing rules—is declared in a single transparent XAML file.
+- **Minimalist Execution:** The standalone binary takes only one optional argument: the path to `unsafie.yaml`.
+  ` located right next to the binary if omitted.
+- **Pure AmneziaWG Transport:** Direct UDP-based WireGuard tunnel with advanced obfuscation parameters (Jc, Jmin, Jmax, S1, S2, H1, H2, H3, H4, psk) to resist DPI heuristics without HTTP masquerades, fake TLS handshakes, or SNI manipulation.
+- **Smart Routing & Dynamic DNS-Learner:** In-memory rule engine evaluating destination CIDRs and domains. Domestic traffic (e.g. Russian domains and services) routes directly with cached IPs in RAM (LearnerSet), while foreign traffic routes through the mesh tunnel.
+- **Timestamped Mesh Synchronization:** When an authorized peer (can_sync_config or admin role) broadcasts a configuration with a newer timestamp, all mesh nodes adopt it into memory and persist it locally.
+- **Compile-Time Android Embedding:** Zero client-side configuration file baking for servers and desktops, but compile-time embedded YAML (@embedFile) for native Android VpnService builds.
 
-```shell
-curl -fsSL https://raw.githubusercontent.com/wprhvso/unsafie-cloud/main/scripts/install.sh | bash
-```
+## Quick Start
 
-### Windows (PowerShell)
+### Build Standalone Binary
 
-```powershell
-irm https://raw.githubusercontent.com/wprhvso/unsafie-cloud/main/scripts/install.ps1 | iex
-```
+cd zig && zig build -Doptimize=ReleaseFast
 
-### Python SDK
+### Run Node
 
-```shell
-pip install ./python
-```
-
-## Architecture
-
-- **Sovereign Mesh Nodes:** Any device (bare-metal server, home PC, laptop, phone) is a sovereign peer with unified Zig 0.15 core.
-- **Single Unified Binary (`unsafie-cloud`):** Server, CLI, node daemon, and VPN engine combined into one standalone binary.
-- **Native Idempotent Host Provisioning:** Zig kernel directly manages Linux sysctl parameters (BBR/FQ), UFW firewall rules, SSH hardening, and systemd units without external Ansible or Python.
-- **Native L3 Mesh VPN (`unsafie0`):** Full L3 packet tunneling without WireGuard or third-party kernel modules. Native Linux Multi-Queue TUN with `IFF_VNET_HDR` and Wintun Ring-0 driver on Windows.
-- **Smart Routing & DumbVPN DNS-Learner:** Real IPs without Fake-IP breakage. Russian traffic routes directly via in-memory `LearnerSet` (TTL 30m) and `rules.bin`, foreign traffic routes via the lowest-cost peer.
-- **Multi-Hop Relay Mesh:** Automated Dijkstra pathfinding over QUIC telemetry. Bypasses regional throttling by routing through intermediate domestic bridge nodes with zero-knowledge blind forwarding.
-- **Unified Port 443:** Authentic web server serving HTTPS content while multiplexing MASQUE CONNECT-UDP (HTTP/3) and RFC 8441 WebSockets (HTTP/2) for authenticated VPN peers.
-- **Split-DNS (`*.internal`):** Built-in DNS resolver on `10.42.0.1:53` mapping `node*.internal` and `vm-*.internal` instances.
-- **Incus KVM Hypervisor:** Hardware virtualization controlled directly via `/var/lib/incus/unix.socket` with ISO-first boot and QCOW2 baking to Cloudflare R2.
-- **Native Cloudflare R2 Management:** Zig kernel directly manages Cloudflare R2 buckets, lifecycle rules, image caching, and disaster recovery backups without external Terraform.
-- **Everywhere GitOps:** Mandatory local Git store on every node (`state/git.zig`) with P2P replication over binary RPC streams.
-- **Zero-Config Client Baking:** Pre-configured standalone binaries (`unsafie-cloud bake --target exe/apk`) with embedded profile overlays for one-click connectivity.
-- **Dual-Slot A/B Auto-Upgrade:** Self-updating nodes with Ed25519 signature verification and zero-downtime socket handover.
-- **Embedded SQLite & FTS5:** Integrated WAL-mode SQLite database with full-text search and Blake3 event ledger.
-- **Version Tracking (`vuh`):** Monorepo module versions synchronized with version-update-helper (`.vuh`).
-
-## Monorepo Layout
-
-- `zig/`: Unified Sovereign Cloud Kernel & CLI (`unsafie-cloud`), L3 Mesh VPN, Edge Gateway, KVM Hypervisor, SQLite Storage, Host Provisioner.
-- `python/`: Asynchronous Python client library (`unsafie_cloud`).
-- `android/`: Native Android VpnService application wrapper.
-- `scripts/`: Fast installation scripts for Linux, macOS, and Windows.
-
-## Development & CI Commands
-
-Format Zig sources:
-
-```shell
-just fix
-```
-
-Run local node / client:
-
-```shell
-just run
-```
-
-Run CI validation:
-
-```shell
-just ci-zig-format
-just ci-zig-test
-just ci-android-ktlint
-just ci-android-lint
-just ci-python-ruff
-just ci-python-ruff-format
-just ci-python-basedpyright
-```
-
-Build release artifacts and deploy to GitHub:
-
-```shell
-just cd-all
-```
+./zig/zig-out/bin/unsafie

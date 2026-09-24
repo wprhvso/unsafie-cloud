@@ -20,6 +20,15 @@ pub const TunDevice = struct {
     allocator: std.mem.Allocator,
     wintun_dev: ?windows.WintunDevice = null,
 
+    pub fn initWithFd(allocator: std.mem.Allocator, fd: std.posix.fd_t) TunDevice {
+        return .{
+            .fd = fd,
+            .name = [_]u8{0} ** 16,
+            .allocator = allocator,
+            .wintun_dev = null,
+        };
+    }
+
     pub fn init(allocator: std.mem.Allocator, ifname: []const u8) !TunDevice {
         if (builtin.os.tag == .windows) {
             const wdev = try windows.WintunDevice.init(allocator, ifname);

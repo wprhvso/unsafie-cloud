@@ -17,4 +17,3 @@ jobs:
       - name: build check
         run: |
           cd zig && zig build -Doptimize=ReleaseFast
-          cd ../cli && zig build -Doptimize=ReleaseFast
