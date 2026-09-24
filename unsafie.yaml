@@ -1,0 +1,113 @@
+metadata:
+  version: 1
+  timestamp: 1727210000
+  updated_by: "unsafie-core"
+
+node:
+  name: "unsafie-core"
+  role: "admin"
+  private_key: "4a2b6c8d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b"
+  listen_port: 51820
+  vpn_ip: "10.42.0.1"
+  vpn_subnet: "10.42.0.0/16"
+  vpn_iface: "unsafie0"
+  mtu: 1420
+
+amnezia:
+  jc: 4
+  jmin: 40
+  jmax: 70
+  s1: 64
+  s2: 48
+  h1: 1287634912
+  h2: 837194625
+  h3: 1092837465
+  h4: 1982736450
+  psk: "unsafie_secret_preshared_key_amnezia_wg_mesh"
+
+roles:
+  - name: "admin"
+    permissions:
+      - "sync_config"
+      - "route_all"
+      - "manage_peers"
+  - name: "peer"
+    permissions:
+      - "route_mesh"
+  - name: "client"
+    permissions:
+      - "route_mesh"
+  - name: "guest"
+    permissions:
+      - "route_direct_only"
+
+peers:
+  - name: "client-android"
+    role: "client"
+    public_key: "b3f8a1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0"
+    endpoint: "198.51.100.10:51820"
+    allowed_ips:
+      - "10.42.0.2/32"
+    can_sync_config: false
+    persistent_keepalive: 25
+  - name: "node-backup-ams"
+    role: "admin"
+    public_key: "c4e1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1"
+    endpoint: "198.51.100.5:51820"
+    allowed_ips:
+      - "10.42.0.3/32"
+    can_sync_config: true
+    persistent_keepalive: 25
+
+routing:
+  default_action: "tunnel"
+  direct_domains:
+    - "*.ru"
+    - "*.su"
+    - "*.рф"
+    - "yandex.ru"
+    - "vk.com"
+    - "gosuslugi.ru"
+    - "sber.ru"
+    - "tbank.ru"
+    - "mail.ru"
+    - "rambler.ru"
+    - "kinopoisk.ru"
+    - "ozon.ru"
+    - "wildberries.ru"
+    - "avito.ru"
+    - "dzen.ru"
+    - "rutube.ru"
+    - "rbc.ru"
+    - "hh.ru"
+    - "auto.ru"
+    - "habr.com"
+  direct_cidrs:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+    - "127.0.0.0/8"
+    - "100.64.0.0/10"
+  blocked_domains:
+    - "adservice.google.com"
+    - "ads.facebook.com"
+    - "doubleclick.net"
+    - "an.yandex.ru"
+  routed_domains:
+    - "*.internal"
+
+dns:
+  listen: "10.42.0.1:53"
+  upstreams:
+    - "1.1.1.1:53"
+    - "8.8.8.8:53"
+    - "77.88.8.8:53"
+  hosts:
+    - name: "node1.internal"
+      ip: "10.42.0.1"
+    - name: "node2.internal"
+      ip: "10.42.0.2"
+    - name: "node3.internal"
+      ip: "10.42.0.3"
+    - name: "router.internal"
+      ip: "10.42.0.1"

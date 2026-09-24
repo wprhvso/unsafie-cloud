@@ -9,17 +9,12 @@ on:
   pull_request:
 
 jobs:
-  python-lint:
+  zig-lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: install uv
-        uses: astral-sh/setup-uv@v5
+      - uses: mlugg/setup-zig@v1
         with:
-          version: "latest"
-      - name: sync dependencies
-        run: uv sync --all-packages
-      - name: ruff check
-        run: uv run ruff check .
-      - name: ruff format check
-        run: uv run ruff format --check .
+          version: 0.15.1
+      - uses: extractions/setup-just@v2
+      - run: just ci-check

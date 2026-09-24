@@ -14,18 +14,4 @@ jobs:
         with:
           version: 0.15.1
       - uses: extractions/setup-just@v2
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: just ci-build-all
-      - run: just ci-android
-      - run: just cd-package
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/*.apk
-            dist/packages/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: just build-static
