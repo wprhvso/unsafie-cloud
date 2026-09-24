@@ -46,9 +46,58 @@ pub const rtattr = extern struct {
     rta_type: u16,
 };
 
+pub const Uplink = struct {
+    iface: [16]u8 = [_]u8{0} ** 16,
+    iface_len: usize = 0,
+    gateway: u32 = 0,
+    ifindex: i32 = -1,
+};
+
+var cached_uplink: ?Uplink = null;
+
 pub const Netlink = struct {
     pub fn rtaAlign(len: usize) usize {
         return (len + 3) & ~@as(usize, 3);
+    }
+
+    pub fn detectUplink() ?Uplink {
+        if (builtin.os.tag != .linux) return null;
+
+        const file = std.fs.openFileAbsolute("/proc/net/route", .{}) catch return null;
+        defer file.close();
+
+        var buf: [4096]u8 = undefined;
+        const len = file.readAll(&buf) catch return null;
+        const content = buf[0..len];
+
+        var line_it = std.mem.splitScalar(u8, content, '\n');
+        _ = line_it.next();
+
+        while (line_it.next()) |line| {
+            if (line.len == 0) continue;
+            var token_it = std.mem.tokenizeAny(u8, line, " \t");
+            const iface = token_it.next() orelse continue;
+            const dest = token_it.next() orelse continue;
+            const gw = token_it.next() orelse continue;
+            const flags_str = token_it.next() orelse continue;
+
+            if (std.mem.eql(u8, dest, "00000000")) {
+                const flags = std.fmt.parseInt(u16, flags_str, 16) catch continue;
+                if ((flags & 0x0002) != 0) {
+                    const gw_int = std.fmt.parseInt(u32, gw, 16) catch continue;
+                    var up = Uplink{
+                        .iface = [_]u8{0} ** 16,
+                        .gateway = @byteSwap(gw_int),
+                        .iface_len = @min(iface.len, 15),
+                        .ifindex = -1,
+                    };
+                    @memcpy(up.iface[0..up.iface_len], iface[0..up.iface_len]);
+                    up.ifindex = getIfIndex(up.iface[0..up.iface_len]) orelse -1;
+                    return up;
+                }
+            }
+        }
+        return null;
     }
 
     pub fn getIfIndex(ifname: []const u8) ?i32 {
@@ -124,6 +173,7 @@ pub const Netlink = struct {
 
     pub fn addRoute(ifindex: i32, dst_ip: u32, prefix_len: u8, gateway: ?u32) !void {
         if (builtin.os.tag != .linux) return;
+        if (ifindex <= 0) return;
 
         const sock = std.posix.socket(AF_NETLINK, std.posix.SOCK.RAW, NETLINK_ROUTE) catch return;
         defer std.posix.close(sock);
@@ -174,6 +224,7 @@ pub const Netlink = struct {
 
     pub fn delRoute(ifindex: i32, dst_ip: u32, prefix_len: u8) !void {
         if (builtin.os.tag != .linux) return;
+        if (ifindex <= 0) return;
 
         const sock = std.posix.socket(AF_NETLINK, std.posix.SOCK.RAW, NETLINK_ROUTE) catch return;
         defer std.posix.close(sock);
@@ -214,26 +265,153 @@ pub const Netlink = struct {
         _ = std.posix.send(sock, buf[0..offset], 0) catch {};
     }
 
-    pub fn setupClientRoutes(vpn_ifname: []const u8, server_ip: ?u32) void {
-        const vpn_idx = getIfIndex(vpn_ifname) orelse return;
+    pub fn addBypassRoute(ip: u32) void {
+        const up = cached_uplink orelse return;
+        if (up.ifindex <= 0) return;
+        addRoute(up.ifindex, ip, 32, up.gateway) catch {};
+        std.debug.print("[BYPASS ROUTE] {d}.{d}.{d}.{d}/32 via {s} dev {s}\n", .{
+            (ip >> 24) & 0xff,
+            (ip >> 16) & 0xff,
+            (ip >> 8) & 0xff,
+            ip & 0xff,
+            formatIp(up.gateway),
+            up.iface[0..up.iface_len],
+        });
+    }
 
-        if (server_ip) |sip| {
-            addRoute(vpn_idx, sip, 32, null) catch {};
+    fn formatIp(ip: u32) [16]u8 {
+        var buf = [_]u8{0} ** 16;
+        _ = std.fmt.bufPrint(&buf, "{d}.{d}.{d}.{d}", .{
+            (ip >> 24) & 0xff,
+            (ip >> 16) & 0xff,
+            (ip >> 8) & 0xff,
+            ip & 0xff,
+        }) catch {};
+        return buf;
+    }
+
+    pub fn setupClientRoutes(vpn_ifname: []const u8, server_ip: ?u32) void {
+        cached_uplink = detectUplink();
+        if (cached_uplink) |up| {
+            std.debug.print("[ROUTE INIT] Physical uplink detected: iface={s} (index={d}) gateway={d}.{d}.{d}.{d}\n", .{
+                up.iface[0..up.iface_len],
+                up.ifindex,
+                (up.gateway >> 24) & 0xff,
+                (up.gateway >> 16) & 0xff,
+                (up.gateway >> 8) & 0xff,
+                up.gateway & 0xff,
+            });
+
+            if (server_ip) |sip| {
+                if (up.ifindex > 0) {
+                    addRoute(up.ifindex, sip, 32, up.gateway) catch {};
+                    std.debug.print("[ROUTE INIT] Added direct host route to VPS {d}.{d}.{d}.{d} via physical uplink\n", .{
+                        (sip >> 24) & 0xff,
+                        (sip >> 16) & 0xff,
+                        (sip >> 8) & 0xff,
+                        sip & 0xff,
+                    });
+                }
+            }
+        } else {
+            std.debug.print("[ROUTE WARN] Could not detect physical default gateway from /proc/net/route\n", .{});
         }
 
-        addRoute(vpn_idx, 0x00000000, 1, null) catch {};
-        addRoute(vpn_idx, 0x80000000, 1, null) catch {};
+        var vpn_idx: i32 = -1;
+        var attempts: usize = 0;
+        while (attempts < 60) : (attempts += 1) {
+            if (getIfIndex(vpn_ifname)) |idx| {
+                vpn_idx = idx;
+                break;
+            }
+            std.Thread.sleep(50 * std.time.ns_per_ms);
+        }
+
+        if (vpn_idx <= 0) {
+            std.debug.print("[ROUTE ERROR] VPN interface {s} not found after timeout! Tunnel routes not active!\n", .{vpn_ifname});
+            return;
+        }
+
+        std.debug.print("[ROUTE INIT] Found VPN device {s} with index {d}\n", .{ vpn_ifname, vpn_idx });
+
+        addRoute(vpn_idx, 0x00000000, 1, null) catch |err| {
+            std.debug.print("[ROUTE ERROR] addRoute 0.0.0.0/1 failed: {any}\n", .{err});
+        };
+        addRoute(vpn_idx, 0x80000000, 1, null) catch |err| {
+            std.debug.print("[ROUTE ERROR] addRoute 128.0.0.0/1 failed: {any}\n", .{err});
+        };
+
+        std.debug.print("[ROUTE INIT] Active: 0.0.0.0/1 -> {s} (all non-domestic traffic captured)\n", .{vpn_ifname});
+        std.debug.print("[ROUTE INIT] Active: 128.0.0.0/1 -> {s} (all non-domestic traffic captured)\n", .{vpn_ifname});
+
+        setupDnsOverride();
     }
 
     pub fn teardownClientRoutes(vpn_ifname: []const u8, server_ip: ?u32) void {
-        const vpn_idx = getIfIndex(vpn_ifname) orelse return;
-
-        delRoute(vpn_idx, 0x00000000, 1) catch {};
-        delRoute(vpn_idx, 0x80000000, 1) catch {};
-
-        if (server_ip) |sip| {
-            delRoute(vpn_idx, sip, 32) catch {};
+        const vpn_idx = getIfIndex(vpn_ifname);
+        if (vpn_idx) |idx| {
+            delRoute(idx, 0x00000000, 1) catch {};
+            delRoute(idx, 0x80000000, 1) catch {};
+            std.debug.print("[ROUTE CLEANUP] Removed 0.0.0.0/1 and 128.0.0.0/1 routes from {s}\n", .{vpn_ifname});
         }
+
+        if (cached_uplink) |up| {
+            if (server_ip) |sip| {
+                if (up.ifindex > 0) {
+                    delRoute(up.ifindex, sip, 32) catch {};
+                    std.debug.print("[ROUTE CLEANUP] Removed VPS host pin route\n", .{});
+                }
+            }
+        }
+
+        restoreDnsOverride();
+    }
+
+    fn setupDnsOverride() void {
+        if (builtin.os.tag != .linux) return;
+
+        if (std.fs.openFileAbsolute("/etc/resolv.conf", .{ .mode = .read_only })) |orig| {
+            var buf: [2048]u8 = undefined;
+            const len = orig.readAll(&buf) catch 0;
+            orig.close();
+
+            if (len > 0) {
+                if (std.fs.createFileAbsolute("/etc/resolv.conf.unsafie.bak", .{})) |bak| {
+                    bak.writeAll(buf[0..len]) catch {};
+                    bak.close();
+                } else |_| {}
+            }
+        } else |_| {}
+
+        if (std.fs.createFileAbsolute("/etc/resolv.conf", .{})) |f| {
+            f.writeAll("nameserver 127.0.0.1\noptions timeout:1\n") catch {};
+            f.close();
+            std.debug.print("[DNS INIT] Configured local DNS resolver: nameserver 127.0.0.1 (/etc/resolv.conf)\n", .{});
+        } else |_| {
+            std.debug.print("[DNS WARN] Could not overwrite /etc/resolv.conf directly, trying resolvectl...\n", .{});
+        }
+
+        var child = std.process.Child.init(&[_][]const u8{ "resolvectl", "dns", "unsafie0", "127.0.0.1" }, std.heap.page_allocator);
+        _ = child.spawnAndWait() catch {};
+    }
+
+    fn restoreDnsOverride() void {
+        if (builtin.os.tag != .linux) return;
+
+        if (std.fs.openFileAbsolute("/etc/resolv.conf.unsafie.bak", .{ .mode = .read_only })) |bak| {
+            var buf: [2048]u8 = undefined;
+            const len = bak.readAll(&buf) catch 0;
+            bak.close();
+
+            if (len > 0) {
+                if (std.fs.createFileAbsolute("/etc/resolv.conf", .{})) |f| {
+                    f.writeAll(buf[0..len]) catch {};
+                    f.close();
+                    std.debug.print("[DNS CLEANUP] Restored original /etc/resolv.conf\n", .{});
+                } else |_| {}
+            }
+            std.fs.deleteFileAbsolute("/etc/resolv.conf.unsafie.bak") catch {};
+        } else |_| {}
     }
 
     fn appendAttr(buf: []u8, offset: usize, attr_type: u16, val: []const u8) usize {
