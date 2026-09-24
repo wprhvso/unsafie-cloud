@@ -38,6 +38,7 @@ pub const UdpListener = struct {
         self.sock_fd = sock;
         self.running.store(true, .seq_cst);
         self.thread = try std.Thread.spawn(.{}, workerLoop, .{ self, tun_dev });
+        std.debug.print("[EDGE UDP:443] Listener started on 0.0.0.0:{d}\n", .{self.port});
     }
 
     pub fn stop(self: *UdpListener) void {
@@ -68,6 +69,7 @@ pub const UdpListener = struct {
         const len = try masque.Masque.packSecure(self.key, ctr, 0, payload, &buf);
 
         _ = std.posix.sendto(self.sock_fd, buf[0..len], 0, &p.any, p.getOsSockLen()) catch {};
+        std.debug.print("[EDGE UDP:443] Outbound -> client ({d} bytes encrypted)\n", .{payload.len});
     }
 
     fn workerLoop(self: *UdpListener, tun_dev: *tun.TunDevice) void {
@@ -95,6 +97,8 @@ pub const UdpListener = struct {
             self.peer_lock.unlock();
 
             _ = tun_dev.writePacket(plain_buf[0..res.payload_len]) catch {};
+
+            std.debug.print("[EDGE UDP:443] Inbound from client -> injected {d} bytes into server TUN\n", .{res.payload_len});
         }
     }
 };

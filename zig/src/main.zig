@@ -104,14 +104,20 @@ pub fn runDaemon(allocator: std.mem.Allocator) !void {
     watchdog.SystemdWatchdog.notifyReady();
     watchdog.SystemdWatchdog.notifyWatchdog();
 
-    std.debug.print("Unsafie Cloud Unified Sovereign Node running on port {d}\n", .{cfg.https_port});
+    std.debug.print("=======================================================\n", .{});
+    std.debug.print("  Unsafie Cloud Sovereign Node\n", .{});
+    std.debug.print("  Status:     ACTIVE\n", .{});
+    std.debug.print("  VPN Port:   {d} (UDP MASQUE + TCP WebSocket TLS 1.3)\n", .{cfg.https_port});
+    std.debug.print("  Interface:  {s} (10.42.0.1)\n", .{cfg.vpn_iface});
+    std.debug.print("  DNS Server: 10.42.0.1:53\n", .{});
+    std.debug.print("=======================================================\n", .{});
 
     while (!should_exit.load(.seq_cst)) {
         std.Thread.sleep(1 * std.time.ns_per_s);
         watchdog.SystemdWatchdog.notifyWatchdog();
     }
 
-    std.debug.print("\nStopping Unsafie Cloud daemon...\n", .{});
+    std.debug.print("\n[SERVER] Stopping Unsafie Cloud daemon...\n", .{});
     vpn_service.stop();
 }
 
@@ -121,23 +127,29 @@ pub fn runClient(allocator: std.mem.Allocator, endpoint: []const u8, token: []co
     var cfg = try config.Config.load(allocator);
     defer cfg.deinit(allocator);
 
-    const prov = host_mod.HostProvisioner.init(allocator);
-    prov.setupClientRoutes(cfg.vpn_iface, endpoint);
-    defer prov.teardownClientRoutes(cfg.vpn_iface);
-
     var vpn_service = try vpn.VpnService.init(allocator, cfg.vpn_iface, cfg.vpn_subnet);
     defer vpn_service.deinit();
 
     vpn_service.setKeyFromToken(token);
+
+    const prov = host_mod.HostProvisioner.init(allocator);
+    prov.setupClientRoutes(cfg.vpn_iface, endpoint);
+    defer prov.teardownClientRoutes(cfg.vpn_iface);
+
     try vpn_service.startClient(endpoint);
 
-    std.debug.print("Unsafie Cloud VPN Client connected to {s} (interface {s})\n", .{ endpoint, cfg.vpn_iface });
-    std.debug.print("Routing domestic Russian traffic directly, overseas traffic via sovereign mesh.\n", .{});
+    std.debug.print("=======================================================\n", .{});
+    std.debug.print("  Unsafie Cloud Sovereign VPN Client\n", .{});
+    std.debug.print("  Connected to: {s}\n", .{endpoint});
+    std.debug.print("  Interface:    {s} (10.42.0.2)\n", .{cfg.vpn_iface});
+    std.debug.print("  DNS proxy:    127.0.0.1:53 (active)\n", .{});
+    std.debug.print("  Routing mode: Smart Routing (Domestic direct, World via mesh)\n", .{});
+    std.debug.print("=======================================================\n", .{});
 
     while (!should_exit.load(.seq_cst)) {
         std.Thread.sleep(1 * std.time.ns_per_s);
     }
 
-    std.debug.print("\nDisconnecting VPN client...\n", .{});
+    std.debug.print("\n[CLIENT] Disconnecting VPN client and restoring network...\n", .{});
     vpn_service.stop();
 }

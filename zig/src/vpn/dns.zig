@@ -2,6 +2,7 @@ const std = @import("std");
 const learner = @import("learner.zig");
 const rules = @import("rules.zig");
 const ipam = @import("ipam.zig");
+const netlink = @import("platform/netlink.zig");
 
 pub const DnsServer = struct {
     allocator: std.mem.Allocator,
@@ -86,12 +87,14 @@ pub const DnsServer = struct {
             self.sock_fd = sock2;
             self.running.store(true, .seq_cst);
             self.thread = std.Thread.spawn(.{}, workerLoop, .{self}) catch null;
+            std.debug.print("[DNS INIT] DNS server listening on 127.0.0.1:5353\n", .{});
             return;
         };
 
         self.sock_fd = sock;
         self.running.store(true, .seq_cst);
         self.thread = std.Thread.spawn(.{}, workerLoop, .{self}) catch null;
+        std.debug.print("[DNS INIT] DNS server listening on 127.0.0.1:{d}\n", .{port});
     }
 
     pub fn stop(self: *DnsServer) void {
@@ -134,6 +137,13 @@ pub const DnsServer = struct {
                     if (self.records.get(qname)) |ip| {
                         var resp_buf: [512]u8 = undefined;
                         const resp_len = buildSyntheticResponse(buf[0..n], ip, &resp_buf);
+                        std.debug.print("[DNS INTERNAL] {s} -> {d}.{d}.{d}.{d}\n", .{
+                            qname,
+                            (ip >> 24) & 0xff,
+                            (ip >> 16) & 0xff,
+                            (ip >> 8) & 0xff,
+                            ip & 0xff,
+                        });
                         _ = std.posix.sendto(
                             self.sock_fd,
                             resp_buf[0..resp_len],
@@ -148,12 +158,18 @@ pub const DnsServer = struct {
                 const is_domestic = self.rules_engine.isDomesticDomain(qname);
                 const target_dns_ip = if (is_domestic) self.upstream_ip else self.remote_ip;
 
+                if (is_domestic) {
+                    std.debug.print("[DNS DOMESTIC] {s} -> Russian service (resolving directly via Yandex DNS)\n", .{qname});
+                } else {
+                    std.debug.print("[DNS OVERSEAS] {s} -> Foreign service (tunneling query to secure remote DNS)\n", .{qname});
+                }
+
                 var fwd_resp: [2048]u8 = undefined;
                 const fwd_len = forwardDnsQuery(buf[0..n], target_dns_ip, &fwd_resp) catch 0;
 
                 if (fwd_len > 12) {
                     if (is_domestic) {
-                        extractAndLearnIps(fwd_resp[0..fwd_len], self.learner_set);
+                        extractAndLearnIps(fwd_resp[0..fwd_len], self.learner_set, qname);
                     }
                     _ = std.posix.sendto(
                         self.sock_fd,
@@ -252,7 +268,7 @@ pub const DnsServer = struct {
         return try std.posix.recv(sock, out, 0);
     }
 
-    fn extractAndLearnIps(resp: []const u8, ls: *learner.LearnerSet) void {
+    fn extractAndLearnIps(resp: []const u8, ls: *learner.LearnerSet, domain: []const u8) void {
         if (resp.len < 12) return;
         const ancount = std.mem.readInt(u16, resp[6..8][0..2], .big);
         if (ancount == 0) return;
@@ -296,6 +312,14 @@ pub const DnsServer = struct {
             if (rtype == 1 and rdlen == 4 and offset + 4 <= resp.len) {
                 const ip = std.mem.readInt(u32, resp[offset .. offset + 4][0..4], .big);
                 ls.learn(ip) catch {};
+                netlink.Netlink.addBypassRoute(ip);
+                std.debug.print("[DNS LEARN] {s} -> {d}.{d}.{d}.{d} (added to LearnerSet & bypass route)\n", .{
+                    domain,
+                    (ip >> 24) & 0xff,
+                    (ip >> 16) & 0xff,
+                    (ip >> 8) & 0xff,
+                    ip & 0xff,
+                });
             }
             offset += rdlen;
         }

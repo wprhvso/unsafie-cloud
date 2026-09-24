@@ -16,6 +16,7 @@ const stun = @import("mesh/stun.zig");
 const timing_wheel = @import("pacing/timing_wheel.zig");
 const bbr = @import("pacing/bbr.zig");
 const masque = @import("transport/masque.zig");
+const netlink = @import("platform/netlink.zig");
 
 pub const VpnMode = enum {
     server,
@@ -45,8 +46,14 @@ pub const VpnService = struct {
     client_sock_fd: std.posix.fd_t = -1,
     tx_counter: std.atomic.Value(u64),
 
+    tx_packets: std.atomic.Value(u64),
+    tx_bytes: std.atomic.Value(u64),
+    rx_packets: std.atomic.Value(u64),
+    rx_bytes: std.atomic.Value(u64),
+
     tun_thread: ?std.Thread = null,
     net_thread: ?std.Thread = null,
+    stats_thread: ?std.Thread = null,
 
     pub fn init(allocator: std.mem.Allocator, ifname: []const u8, subnet: []const u8) !*VpnService {
         const self = try allocator.create(VpnService);
@@ -73,8 +80,13 @@ pub const VpnService = struct {
         self.server_addr = null;
         self.client_sock_fd = -1;
         self.tx_counter = std.atomic.Value(u64).init(1);
+        self.tx_packets = std.atomic.Value(u64).init(0);
+        self.tx_bytes = std.atomic.Value(u64).init(0);
+        self.rx_packets = std.atomic.Value(u64).init(0);
+        self.rx_bytes = std.atomic.Value(u64).init(0);
         self.tun_thread = null;
         self.net_thread = null;
+        self.stats_thread = null;
 
         silence_rst.BpfSilencer.silenceViaFirewall(443);
         return self;
@@ -92,6 +104,7 @@ pub const VpnService = struct {
         self.running.store(true, .seq_cst);
 
         try self.dns_server.start(53);
+        self.stats_thread = try std.Thread.spawn(.{}, statsLoop, .{self});
     }
 
     pub fn startClient(self: *VpnService, server_endpoint: []const u8) !void {
@@ -119,6 +132,7 @@ pub const VpnService = struct {
 
         self.tun_thread = try std.Thread.spawn(.{}, clientTunLoop, .{self});
         self.net_thread = try std.Thread.spawn(.{}, clientNetLoop, .{self});
+        self.stats_thread = try std.Thread.spawn(.{}, statsLoop, .{self});
     }
 
     pub fn stop(self: *VpnService) void {
@@ -140,6 +154,11 @@ pub const VpnService = struct {
         if (self.net_thread) |t| {
             t.join();
             self.net_thread = null;
+        }
+
+        if (self.stats_thread) |t| {
+            t.join();
+            self.stats_thread = null;
         }
     }
 
@@ -168,7 +187,18 @@ pub const VpnService = struct {
 
             const action = self.l3_router.decide(dst_ip, dst_port, false);
             switch (action) {
-                .direct => continue,
+                .direct => {
+                    netlink.Netlink.addBypassRoute(dst_ip);
+                    std.debug.print("[TRAFFIC -> BYPASS] {d}.{d}.{d}.{d}:{d} ({d} bytes) [Domestic IP bypass]\n", .{
+                        (dst_ip >> 24) & 0xff,
+                        (dst_ip >> 16) & 0xff,
+                        (dst_ip >> 8) & 0xff,
+                        dst_ip & 0xff,
+                        dst_port,
+                        n,
+                    });
+                    continue;
+                },
                 .drop => continue,
                 .mesh_internal, .tunnel_exit => {
                     const s_addr = self.server_addr orelse continue;
@@ -182,6 +212,18 @@ pub const VpnService = struct {
                         &s_addr.any,
                         s_addr.getOsSockLen(),
                     ) catch {};
+
+                    _ = self.tx_packets.fetchAdd(1, .monotonic);
+                    _ = self.tx_bytes.fetchAdd(n, .monotonic);
+
+                    std.debug.print("[TRAFFIC -> TUNNEL] {d}.{d}.{d}.{d}:{d} ({d} bytes) [Encrypted MASQUE -> VPS]\n", .{
+                        (dst_ip >> 24) & 0xff,
+                        (dst_ip >> 16) & 0xff,
+                        (dst_ip >> 8) & 0xff,
+                        dst_ip & 0xff,
+                        dst_port,
+                        n,
+                    });
                 },
             }
         }
@@ -207,6 +249,31 @@ pub const VpnService = struct {
 
             const res = masque.Masque.unpackSecure(self.key, recv_buf[0..n], &plain_buf) catch continue;
             _ = self.tun_dev.writePacket(plain_buf[0..res.payload_len]) catch {};
+
+            _ = self.rx_packets.fetchAdd(1, .monotonic);
+            _ = self.rx_bytes.fetchAdd(res.payload_len, .monotonic);
+
+            std.debug.print("[TRAFFIC <- TUNNEL] Received {d} bytes from VPS -> written to unsafie0\n", .{res.payload_len});
+        }
+    }
+
+    fn statsLoop(self: *VpnService) void {
+        while (self.running.load(.seq_cst)) {
+            std.Thread.sleep(5 * std.time.ns_per_s);
+            if (!self.running.load(.seq_cst)) break;
+
+            const tx_p = self.tx_packets.load(.monotonic);
+            const tx_b = self.tx_bytes.load(.monotonic) / 1024;
+            const rx_p = self.rx_packets.load(.monotonic);
+            const rx_b = self.rx_bytes.load(.monotonic) / 1024;
+
+            std.debug.print("[TUNNEL STATS] TX: {d} pkts ({d} KB) | RX: {d} pkts ({d} KB) | Mode: {s}\n", .{
+                tx_p,
+                tx_b,
+                rx_p,
+                rx_b,
+                if (self.mode == .client) "CLIENT" else "SERVER",
+            });
         }
     }
 };
