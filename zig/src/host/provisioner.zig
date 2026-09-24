@@ -1,4 +1,6 @@
 const std = @import("std");
+const netlink = @import("../vpn/platform/netlink.zig");
+const ipam = @import("../vpn/ipam.zig");
 
 pub const HostProvisioner = struct {
     allocator: std.mem.Allocator,
@@ -70,15 +72,42 @@ pub const HostProvisioner = struct {
         }
     }
 
+    fn findTool(name: []const u8) []const u8 {
+        const candidates = [_][]const u8{
+            "/run/current-system/sw/bin",
+            "/run/wrappers/bin",
+            "/nix/var/nix/profiles/default/bin",
+            "/usr/local/sbin",
+            "/usr/local/bin",
+            "/usr/sbin",
+            "/usr/bin",
+            "/sbin",
+            "/bin",
+        };
+
+        var buf: [256]u8 = undefined;
+        for (candidates) |dir| {
+            const full = std.fmt.bufPrint(&buf, "{s}/{s}", .{ dir, name }) catch continue;
+            if (std.fs.accessAbsolute(full, .{})) |_| {
+                return full;
+            } else |_| {}
+        }
+
+        return name;
+    }
+
     pub fn ensureFirewall(self: HostProvisioner, vpn_iface: []const u8) !void {
         _ = self;
+        const ipt = findTool("iptables");
+        const ufw = findTool("ufw");
+
         const ufw_rules = [_][]const []const u8{
-            &[_][]const u8{ "ufw", "allow", "22/tcp" },
-            &[_][]const u8{ "ufw", "allow", "80/tcp" },
-            &[_][]const u8{ "ufw", "allow", "443/tcp" },
-            &[_][]const u8{ "ufw", "allow", "443/udp" },
-            &[_][]const u8{ "ufw", "allow", "in", "on", vpn_iface },
-            &[_][]const u8{ "ufw", "--force", "enable" },
+            &[_][]const u8{ ufw, "allow", "22/tcp" },
+            &[_][]const u8{ ufw, "allow", "80/tcp" },
+            &[_][]const u8{ ufw, "allow", "443/tcp" },
+            &[_][]const u8{ ufw, "allow", "443/udp" },
+            &[_][]const u8{ ufw, "allow", "in", "on", vpn_iface },
+            &[_][]const u8{ ufw, "--force", "enable" },
         };
 
         var ufw_worked = false;
@@ -90,48 +119,54 @@ pub const HostProvisioner = struct {
         }
 
         const nat_rules = [_][]const []const u8{
-            &[_][]const u8{ "iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "10.42.0.0/16", "-j", "MASQUERADE" },
-            &[_][]const u8{ "iptables", "-A", "FORWARD", "-i", vpn_iface, "-j", "ACCEPT" },
-            &[_][]const u8{ "iptables", "-A", "FORWARD", "-o", vpn_iface, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT" },
+            &[_][]const u8{ ipt, "-t", "nat", "-A", "POSTROUTING", "-s", "10.42.0.0/16", "-j", "MASQUERADE" },
+            &[_][]const u8{ ipt, "-A", "FORWARD", "-i", vpn_iface, "-j", "ACCEPT" },
+            &[_][]const u8{ ipt, "-A", "FORWARD", "-o", vpn_iface, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT" },
+            &[_][]const u8{ ipt, "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT" },
+            &[_][]const u8{ ipt, "-A", "INPUT", "-p", "tcp", "--dport", "80", "-j", "ACCEPT" },
+            &[_][]const u8{ ipt, "-A", "INPUT", "-p", "tcp", "--dport", "443", "-j", "ACCEPT" },
+            &[_][]const u8{ ipt, "-A", "INPUT", "-p", "udp", "--dport", "443", "-j", "ACCEPT" },
+            &[_][]const u8{ ipt, "-A", "INPUT", "-i", vpn_iface, "-j", "ACCEPT" },
         };
 
         for (nat_rules) |rule| {
             var child = std.process.Child.init(rule, std.heap.page_allocator);
             _ = child.spawnAndWait() catch {};
         }
-
-        if (!ufw_worked) {
-            const ipt_rules = [_][]const []const u8{
-                &[_][]const u8{ "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "22", "-j", "ACCEPT" },
-                &[_][]const u8{ "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "80", "-j", "ACCEPT" },
-                &[_][]const u8{ "iptables", "-A", "INPUT", "-p", "tcp", "--dport", "443", "-j", "ACCEPT" },
-                &[_][]const u8{ "iptables", "-A", "INPUT", "-p", "udp", "--dport", "443", "-j", "ACCEPT" },
-                &[_][]const u8{ "iptables", "-A", "INPUT", "-i", vpn_iface, "-j", "ACCEPT" },
-            };
-            for (ipt_rules) |rule| {
-                var child = std.process.Child.init(rule, std.heap.page_allocator);
-                _ = child.spawnAndWait() catch {};
-            }
-        }
     }
 
-    pub fn setupClientRoutes(self: HostProvisioner, vpn_iface: []const u8, server_ip: []const u8) void {
+    pub fn setupClientRoutes(self: HostProvisioner, vpn_iface: []const u8, server_endpoint: []const u8) void {
         _ = self;
-        var r1 = std.process.Child.init(&[_][]const u8{ "ip", "route", "add", "0.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
+        var server_ip_opt: ?u32 = null;
+        var host = server_endpoint;
+        if (std.mem.indexOfScalar(u8, server_endpoint, ':')) |colon| {
+            host = server_endpoint[0..colon];
+        }
+
+        if (std.net.Address.parseIp4(host, 0)) |addr| {
+            const octets = std.mem.asBytes(&addr.in.sa.addr);
+            server_ip_opt = std.mem.readInt(u32, octets[0..4], .big);
+        } else |_| {}
+
+        netlink.Netlink.setupClientRoutes(vpn_iface, server_ip_opt);
+
+        const ip_cmd = findTool("ip");
+        var r1 = std.process.Child.init(&[_][]const u8{ ip_cmd, "route", "add", "0.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
         _ = r1.spawnAndWait() catch {};
 
-        var r2 = std.process.Child.init(&[_][]const u8{ "ip", "route", "add", "128.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
+        var r2 = std.process.Child.init(&[_][]const u8{ ip_cmd, "route", "add", "128.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
         _ = r2.spawnAndWait() catch {};
-
-        _ = server_ip;
     }
 
     pub fn teardownClientRoutes(self: HostProvisioner, vpn_iface: []const u8) void {
         _ = self;
-        var r1 = std.process.Child.init(&[_][]const u8{ "ip", "route", "del", "0.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
+        netlink.Netlink.teardownClientRoutes(vpn_iface, null);
+
+        const ip_cmd = findTool("ip");
+        var r1 = std.process.Child.init(&[_][]const u8{ ip_cmd, "route", "del", "0.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
         _ = r1.spawnAndWait() catch {};
 
-        var r2 = std.process.Child.init(&[_][]const u8{ "ip", "route", "del", "128.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
+        var r2 = std.process.Child.init(&[_][]const u8{ ip_cmd, "route", "del", "128.0.0.0/1", "dev", vpn_iface }, std.heap.page_allocator);
         _ = r2.spawnAndWait() catch {};
     }
 
