@@ -110,7 +110,6 @@ pub const AmneziaEngine = struct {
         self.dns_srv.deinit();
         self.router.deinit();
         self.learner.deinit();
-        self.tun.deinit();
         self.config.deinit();
         const a = self.allocator;
         a.destroy(self);
@@ -198,12 +197,14 @@ pub const AmneziaEngine = struct {
         if (!self.running.load(.seq_cst)) return;
         self.running.store(false, .seq_cst);
 
-        if (self.udp_socket >= 0) {
-            std.posix.close(self.udp_socket);
-            self.udp_socket = -1;
-        }
-
         self.dns_srv.stop();
+        self.tun.deinit();
+
+        if (self.udp_socket >= 0) {
+            const sock = self.udp_socket;
+            self.udp_socket = -1;
+            std.posix.close(sock);
+        }
 
         for (&self.threads) |*opt_t| {
             if (opt_t.*) |t| {
@@ -247,10 +248,16 @@ pub const AmneziaEngine = struct {
         var stun_req: [32]u8 = undefined;
         const req_len = protocol_mod.buildStunRequest(&stun_req, tx_id) catch return;
 
+        const stun_sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch return;
+        defer std.posix.close(stun_sock);
+
+        const timeout = std.posix.timeval{ .sec = 1, .usec = 0 };
+        _ = std.posix.setsockopt(stun_sock, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&timeout)) catch {};
+
         var attempts: usize = 0;
         while (attempts < 3 and self.running.load(.seq_cst)) : (attempts += 1) {
             _ = std.posix.sendto(
-                self.udp_socket,
+                stun_sock,
                 stun_req[0..req_len],
                 0,
                 &dest.any,
@@ -258,19 +265,13 @@ pub const AmneziaEngine = struct {
             ) catch {};
 
             var resp_buf: [64]u8 = undefined;
-            const timeout = std.posix.timeval{ .sec = 1, .usec = 0 };
-            _ = std.posix.setsockopt(self.udp_socket, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&timeout)) catch {};
-
-            const n = std.posix.recv(self.udp_socket, &resp_buf, 0) catch continue;
+            const n = std.posix.recv(stun_sock, &resp_buf, 0) catch continue;
             if (protocol_mod.parseStunResponse(resp_buf[0..n], tx_id)) |stun_res| {
                 const is_ru = self.router.rules_engine.matchIp(stun_res.ip);
                 self.router.is_russian_client = is_ru;
                 break;
             }
         }
-
-        const zero_timeout = std.posix.timeval{ .sec = 0, .usec = 0 };
-        _ = std.posix.setsockopt(self.udp_socket, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&zero_timeout)) catch {};
     }
 
     fn sendHandshakeInit(self: *AmneziaEngine) void {
@@ -317,6 +318,16 @@ pub const AmneziaEngine = struct {
         var buf: [4096]u8 = undefined;
 
         while (self.running.load(.seq_cst)) {
+            if (self.udp_socket < 0) break;
+
+            var pfd = [1]std.posix.pollfd{.{
+                .fd = self.udp_socket,
+                .events = std.posix.POLL.IN,
+                .revents = 0,
+            }};
+            const rc = std.posix.poll(&pfd, 50) catch break;
+            if (rc == 0 or (pfd[0].revents & std.posix.POLL.IN) == 0) continue;
+
             var src_addr: std.posix.sockaddr.in = undefined;
             var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.in);
 
@@ -328,7 +339,6 @@ pub const AmneziaEngine = struct {
                 &addr_len,
             ) catch {
                 if (!self.running.load(.seq_cst)) break;
-                std.Thread.sleep(10 * std.time.ns_per_ms);
                 continue;
             };
 
@@ -549,6 +559,7 @@ pub const AmneziaEngine = struct {
                 continue;
             };
 
+            if (n == 0) continue;
             if (n < 20) continue;
             const version = buf[0] >> 4;
             if (version != 4) continue;
@@ -628,7 +639,12 @@ pub const AmneziaEngine = struct {
     fn maintenanceLoop(self: *AmneziaEngine) void {
         var tick: u64 = 0;
         while (self.running.load(.seq_cst)) {
-            std.Thread.sleep(1 * std.time.ns_per_s);
+            var s: usize = 0;
+            while (s < 20 and self.running.load(.seq_cst)) : (s += 1) {
+                std.Thread.sleep(50 * std.time.ns_per_ms);
+            }
+            if (!self.running.load(.seq_cst)) break;
+
             tick += 1;
 
             if (tick % 60 == 0) {
