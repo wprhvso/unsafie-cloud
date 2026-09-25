@@ -1,4 +1,5 @@
 const std = @import("std");
+const linux = std.os.linux;
 
 pub const Mode = enum {
     server,
@@ -188,12 +189,22 @@ pub const FullConfig = struct {
     }
 
     pub fn saveToFile(self: *const FullConfig, path: []const u8) !void {
-        const file = try std.fs.cwd().createFile(path, .{ .truncate = true });
-        defer file.close();
-        var buf = std.ArrayList(u8){ .items = &.{}, .capacity = 0 };
+        var path_buf: [1024]u8 = undefined;
+        if (path.len >= 1023) return error.PathTooLong;
+        @memcpy(path_buf[0..path.len], path);
+        path_buf[path.len] = 0;
+        const path_z: [*:0]const u8 = @ptrCast(&path_buf);
+
+        const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+        const fd_rc = linux.open(path_z, flags, 0o644);
+        const fd: i32 = @intCast(fd_rc);
+        if (fd < 0) return error.CannotCreateFile;
+        defer _ = linux.close(fd);
+
+        var buf: std.ArrayList(u8) = .empty;
         defer buf.deinit(std.heap.page_allocator);
         try self.serialize(buf.writer(std.heap.page_allocator));
-        try file.writeAll(buf.items);
+        _ = linux.write(fd, buf.items.ptr, buf.items.len);
     }
 };
 
@@ -242,13 +253,13 @@ pub fn parseYaml(allocator: std.mem.Allocator, input: []const u8) !FullConfig {
 
     var cfg = FullConfig{ .arena = arena_ptr };
 
-    var servers_list = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
-    var direct_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
-    var direct_cidrs = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
-    var blocked_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
-    var routed_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
-    var upstreams = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
-    var hosts_list = std.ArrayList(HostRecord){ .items = &.{}, .capacity = 0 };
+    var servers_list: std.ArrayList([]const u8) = .empty;
+    var direct_domains: std.ArrayList([]const u8) = .empty;
+    var direct_cidrs: std.ArrayList([]const u8) = .empty;
+    var blocked_domains: std.ArrayList([]const u8) = .empty;
+    var routed_domains: std.ArrayList([]const u8) = .empty;
+    var upstreams: std.ArrayList([]const u8) = .empty;
+    var hosts_list: std.ArrayList(HostRecord) = .empty;
 
     var current_section: []const u8 = "";
     var current_subsection: []const u8 = "";
@@ -413,12 +424,21 @@ pub fn parseYaml(allocator: std.mem.Allocator, input: []const u8) !FullConfig {
 }
 
 pub fn loadFromFile(allocator: std.mem.Allocator, path: []const u8) !FullConfig {
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
-    defer file.close();
+    var path_buf: [1024]u8 = undefined;
+    if (path.len >= 1023) return error.PathTooLong;
+    @memcpy(path_buf[0..path.len], path);
+    path_buf[path.len] = 0;
+    const path_z: [*:0]const u8 = @ptrCast(&path_buf);
 
-    const max_size = 10 * 1024 * 1024;
-    const content = try file.readToEndAlloc(allocator, max_size);
-    defer allocator.free(content);
+    const fd_rc = linux.open(path_z, .{}, 0);
+    const fd: i32 = @intCast(fd_rc);
+    if (fd < 0) return error.FileNotFound;
+    defer _ = linux.close(fd);
 
-    return parseYaml(allocator, content);
+    var buf = try allocator.alloc(u8, 65536);
+    defer allocator.free(buf);
+
+    const n = linux.read(fd, buf.ptr, buf.len);
+    if (n < 0) return error.ReadFailed;
+    return parseYaml(allocator, buf[0..@intCast(n)]);
 }

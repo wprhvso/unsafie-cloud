@@ -1,4 +1,5 @@
 const std = @import("std");
+const sys = @import("../sys.zig");
 
 pub const SpinLock = struct {
     state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
@@ -35,7 +36,7 @@ pub const LearnerSet = struct {
     pub fn learn(self: *LearnerSet, ip: u32) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const expires = std.time.timestamp() + self.ttl_seconds;
+        const expires = sys.timestamp() + self.ttl_seconds;
         try self.seen.put(ip, expires);
     }
 
@@ -43,14 +44,14 @@ pub const LearnerSet = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         const expires = self.seen.get(ip) orelse return false;
-        return std.time.timestamp() < expires;
+        return sys.timestamp() < expires;
     }
 
     pub fn sweep(self: *LearnerSet) void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const now = std.time.timestamp();
-        var to_remove = std.ArrayList(u32){ .items = &.{}, .capacity = 0 };
+        const now = sys.timestamp();
+        var to_remove: std.ArrayList(u32) = .empty;
         defer to_remove.deinit(self.allocator);
 
         var it = self.seen.iterator();

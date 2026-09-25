@@ -1,10 +1,12 @@
 const std = @import("std");
+const protocol_mod = @import("protocol.zig");
+const sys = @import("../sys.zig");
 
 pub const PeerSession = struct {
     name: []const u8 = "",
     role: []const u8 = "client",
-    public_key: [32]u8 = [_]u8{0} ** 32,
-    endpoint: ?std.net.Address = null,
+    public_key: [32]u8 = @as([32]u8, @splat(0)),
+    endpoint: ?protocol_mod.SocketAddress = null,
     allowed_ip: u32 = 0,
     allowed_mask: u32 = 0xffffffff,
     can_sync_config: bool = false,
@@ -17,7 +19,7 @@ pub const PeerSession = struct {
     receiver_index: u32 = 0,
     tx_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
     rx_counter: std.atomic.Value(u64) = std.atomic.Value(u64).init(0),
-    session_key: [32]u8 = [_]u8{0} ** 32,
+    session_key: [32]u8 = @as([32]u8, @splat(0)),
     has_session: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 
     pub fn matchesIp(self: *const PeerSession, ip: u32) bool {
@@ -30,6 +32,6 @@ pub const PeerSession = struct {
 
     pub fn recordRx(self: *PeerSession, bytes: usize) void {
         _ = self.rx_bytes.fetchAdd(@intCast(bytes), .monotonic);
-        self.last_seen_ts.store(std.time.timestamp(), .monotonic);
+        self.last_seen_ts.store(sys.timestamp(), .monotonic);
     }
 };

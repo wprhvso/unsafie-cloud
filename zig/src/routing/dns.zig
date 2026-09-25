@@ -1,6 +1,8 @@
 const std = @import("std");
+const linux = std.os.linux;
 const learner_mod = @import("learner.zig");
 const router_mod = @import("router.zig");
+const protocol_mod = @import("../amnezia/protocol.zig");
 
 pub const DnsServer = struct {
     allocator: std.mem.Allocator,
@@ -10,7 +12,7 @@ pub const DnsServer = struct {
     router: *const router_mod.SmartRouter,
     learner: *learner_mod.LearnerSet,
     running: std.atomic.Value(bool),
-    sock_fd: std.posix.fd_t = -1,
+    sock_fd: i32 = -1,
     thread: ?std.Thread = null,
 
     pub fn init(
@@ -51,22 +53,23 @@ pub const DnsServer = struct {
         }
 
         const ip = router_mod.parseIpv4(host_part) orelse 0;
-        const bind_addr = std.net.Address.initIp4(@as([4]u8, @bitCast(std.mem.nativeToBig(u32, ip))), port);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        const sock: i32 = @intCast(sock_rc);
+        if (sock < 0) return error.SocketFailed;
 
-        const sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch |err| {
-            return err;
-        };
+        var sa: linux.sockaddr.in = undefined;
+        sa.family = linux.AF.INET;
+        sa.port = std.mem.nativeToBig(u16, port);
+        sa.addr = @bitCast(std.mem.nativeToBig(u32, ip));
 
-        const reuse: c_int = 1;
-        _ = std.posix.setsockopt(sock, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, std.mem.asBytes(&reuse)) catch {};
-
-        std.posix.bind(sock, &bind_addr.any, bind_addr.getOsSockLen()) catch {
-            const fallback_addr = std.net.Address.initIp4([_]u8{0} ** 4, 0);
-            std.posix.bind(sock, &fallback_addr.any, fallback_addr.getOsSockLen()) catch |err| {
-                std.posix.close(sock);
-                return err;
-            };
-        };
+        if (linux.bind(sock, @ptrCast(&sa), @sizeOf(linux.sockaddr.in)) != 0) {
+            sa.addr = 0;
+            sa.port = 0;
+            if (linux.bind(sock, @ptrCast(&sa), @sizeOf(linux.sockaddr.in)) != 0) {
+                _ = linux.close(sock);
+                return error.BindFailed;
+            }
+        }
 
         self.sock_fd = sock;
         self.running.store(true, .seq_cst);
@@ -76,13 +79,13 @@ pub const DnsServer = struct {
     pub fn stop(self: *DnsServer) void {
         if (!self.running.load(.seq_cst)) return;
         self.running.store(false, .seq_cst);
-        if (self.sock_fd >= 0) {
-            std.posix.close(self.sock_fd);
-            self.sock_fd = -1;
-        }
         if (self.thread) |t| {
             t.join();
             self.thread = null;
+        }
+        if (self.sock_fd >= 0) {
+            _ = linux.close(self.sock_fd);
+            self.sock_fd = -1;
         }
     }
 
@@ -92,47 +95,56 @@ pub const DnsServer = struct {
         var ans_buf: [2048]u8 = undefined;
 
         while (self.running.load(.seq_cst)) {
-            var src_addr: std.posix.sockaddr.in = undefined;
-            var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.in);
+            if (self.sock_fd < 0) break;
 
-            const n = std.posix.recvfrom(
+            var pfd = [1]linux.pollfd{.{
+                .fd = self.sock_fd,
+                .events = linux.POLL.IN,
+                .revents = 0,
+            }};
+            const rc = linux.poll(&pfd, 1, 50);
+            if (rc <= 0 or (pfd[0].revents & linux.POLL.IN) == 0) continue;
+
+            var src_addr: linux.sockaddr.in = undefined;
+            var addr_len: linux.socklen_t = @sizeOf(linux.sockaddr.in);
+
+            const n_rc = linux.recvfrom(
                 self.sock_fd,
-                &buf,
+                buf[0..].ptr,
+                buf.len,
                 0,
                 @ptrCast(&src_addr),
                 &addr_len,
-            ) catch {
-                if (!self.running.load(.seq_cst)) break;
-                std.Thread.sleep(10 * std.time.ns_per_ms);
-                continue;
-            };
-
-            if (n < 12) continue;
+            );
+            if (n_rc < 12) continue;
+            const n: usize = @intCast(n_rc);
 
             const parsed = parseDomainName(buf[0..n], 12, &domain_buf);
             if (parsed) |info| {
                 if (self.static_hosts.get(info.domain)) |static_ip| {
                     if (buildAAnswer(buf[0..n], static_ip, &ans_buf)) |ans_len| {
-                        _ = std.posix.sendto(
+                        _ = linux.sendto(
                             self.sock_fd,
-                            ans_buf[0..ans_len],
+                            ans_buf[0..ans_len].ptr,
+                            ans_len,
                             0,
                             @ptrCast(&src_addr),
                             addr_len,
-                        ) catch {};
+                        );
                         continue;
                     }
                 }
 
                 if (std.mem.endsWith(u8, info.domain, ".internal")) {
                     if (buildAAnswer(buf[0..n], 0x0a2a0001, &ans_buf)) |ans_len| {
-                        _ = std.posix.sendto(
+                        _ = linux.sendto(
                             self.sock_fd,
-                            ans_buf[0..ans_len],
+                            ans_buf[0..ans_len].ptr,
+                            ans_len,
                             0,
                             @ptrCast(&src_addr),
                             addr_len,
-                        ) catch {};
+                        );
                         continue;
                     }
                 }
@@ -140,19 +152,20 @@ pub const DnsServer = struct {
                 for (self.router.blocked_domains.items) |pat| {
                     if (router_mod.SmartRouter.matchesDomain(pat, info.domain)) {
                         if (buildAAnswer(buf[0..n], 0, &ans_buf)) |ans_len| {
-                            _ = std.posix.sendto(
+                            _ = linux.sendto(
                                 self.sock_fd,
-                                ans_buf[0..ans_len],
+                                ans_buf[0..ans_len].ptr,
+                                ans_len,
                                 0,
                                 @ptrCast(&src_addr),
                                 addr_len,
-                            ) catch {};
+                            );
                         }
                         break;
                     }
                 }
 
-                self.forwardUpstream(buf[0..n], info.domain, @ptrCast(&src_addr), addr_len);
+                self.forwardUpstream(buf[0..n], info.domain, &src_addr, addr_len);
             }
         }
     }
@@ -161,14 +174,13 @@ pub const DnsServer = struct {
         self: *DnsServer,
         query: []const u8,
         domain: []const u8,
-        client_addr: *const std.posix.sockaddr,
-        client_len: std.posix.socklen_t,
+        client_addr: *const linux.sockaddr.in,
+        client_len: linux.socklen_t,
     ) void {
-        const upstream_sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch return;
-        defer std.posix.close(upstream_sock);
-
-        const timeout = std.posix.timeval{ .sec = 2, .usec = 0 };
-        _ = std.posix.setsockopt(upstream_sock, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&timeout)) catch {};
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        const upstream_sock: i32 = @intCast(sock_rc);
+        if (upstream_sock < 0) return;
+        defer _ = linux.close(upstream_sock);
 
         var target_ip: u32 = 0x01010101;
         var target_port: u16 = 53;
@@ -182,29 +194,42 @@ pub const DnsServer = struct {
             target_ip = router_mod.parseIpv4(up_str) orelse 0x01010101;
         }
 
-        const up_addr = std.net.Address.initIp4(@as([4]u8, @bitCast(std.mem.nativeToBig(u32, target_ip))), target_port);
+        var up_sa: linux.sockaddr.in = undefined;
+        up_sa.family = linux.AF.INET;
+        up_sa.port = std.mem.nativeToBig(u16, target_port);
+        up_sa.addr = @bitCast(std.mem.nativeToBig(u32, target_ip));
 
-        _ = std.posix.sendto(
+        _ = linux.sendto(
             upstream_sock,
-            query,
+            query.ptr,
+            query.len,
             0,
-            &up_addr.any,
-            up_addr.getOsSockLen(),
-        ) catch return;
+            @ptrCast(&up_sa),
+            @sizeOf(linux.sockaddr.in),
+        );
+
+        var pfd = [1]linux.pollfd{.{
+            .fd = upstream_sock,
+            .events = linux.POLL.IN,
+            .revents = 0,
+        }};
+        if (linux.poll(&pfd, 1, 1500) <= 0) return;
 
         var resp_buf: [2048]u8 = undefined;
-        const resp_len = std.posix.recv(upstream_sock, &resp_buf, 0) catch return;
-        if (resp_len < 12) return;
+        const resp_rc = linux.read(upstream_sock, resp_buf[0..].ptr, resp_buf.len);
+        if (resp_rc < 12) return;
+        const resp_len: usize = @intCast(resp_rc);
 
         self.extractLearnedIps(resp_buf[0..resp_len], domain);
 
-        _ = std.posix.sendto(
+        _ = linux.sendto(
             self.sock_fd,
-            resp_buf[0..resp_len],
+            resp_buf[0..resp_len].ptr,
+            resp_len,
             0,
-            client_addr,
+            @ptrCast(client_addr),
             client_len,
-        ) catch {};
+        );
     }
 
     fn extractLearnedIps(self: *DnsServer, resp: []const u8, domain: []const u8) void {
