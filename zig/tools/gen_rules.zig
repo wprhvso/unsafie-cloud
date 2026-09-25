@@ -1,3 +1,4 @@
+const linux = std.os.linux;
 const std = @import("std");
 
 pub const Ipv4Range = struct {
@@ -12,13 +13,15 @@ pub fn buildRulesBin(
     exacts: []const []const u8,
     keywords: []const []const u8,
 ) ![]u8 {
-    var body = std.ArrayList(u8){ .items = &.{}, .capacity = 0 };
+    var body: std.ArrayList(u8) = .empty;
     defer body.deinit(allocator);
 
-    var header = [_]u8{0} ** 128;
+    var header = @as([128]u8, @splat(0));
     @memcpy(header[0..8], "DUMBRULE");
     std.mem.writeInt(u32, header[8..12][0..4], 1, .little);
-    std.mem.writeInt(i64, header[12..20][0..8], std.time.timestamp(), .little);
+    var ts: linux.timespec = undefined;
+    _ = linux.clock_gettime(linux.CLOCK.REALTIME, &ts);
+    std.mem.writeInt(i64, header[12..20][0..8], @intCast(ts.sec), .little);
 
     const ipv4_off: u32 = 128 + @as(u32, @intCast(body.items.len));
     std.mem.writeInt(u32, header[52..56][0..4], ipv4_off, .little);
@@ -55,7 +58,7 @@ fn writeStringTable(
     std.mem.writeInt(u32, header[tbl_off_hdr .. tbl_off_hdr + 4][0..4], tbl_off, .little);
     std.mem.writeInt(u32, header[count_hdr .. count_hdr + 4][0..4], @intCast(items.len), .little);
 
-    var blob = std.ArrayList(u8){ .items = &.{}, .capacity = 0 };
+    var blob: std.ArrayList(u8) = .empty;
     defer blob.deinit(allocator);
 
     var pos: u32 = 0;
@@ -76,17 +79,15 @@ fn writeStringTable(
     try body.appendSlice(allocator, blob.items);
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    var it = init.minimal.args.iterate();
+    _ = it.skip();
 
     var out_path: []const u8 = "rules.bin";
-    if (args.len > 1) {
-        out_path = args[1];
+    if (it.next()) |p| {
+        out_path = p;
     }
 
     const default_suffixes = [_][]const u8{
@@ -138,7 +139,17 @@ pub fn main() !void {
     );
     defer allocator.free(bin_data);
 
-    const out_file = try std.fs.cwd().createFile(out_path, .{ .truncate = true });
-    defer out_file.close();
-    try out_file.writeAll(bin_data);
+    var path_buf: [1024]u8 = undefined;
+    const copy_len = @min(out_path.len, 1023);
+    @memcpy(path_buf[0..copy_len], out_path[0..copy_len]);
+    path_buf[copy_len] = 0;
+    const path_z: [*:0]const u8 = @ptrCast(&path_buf);
+
+    const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+    const fd_rc = linux.open(path_z, flags, 0o644);
+    const fd: i32 = @intCast(fd_rc);
+    if (fd >= 0) {
+        defer _ = linux.close(fd);
+        _ = linux.write(fd, bin_data.ptr, bin_data.len);
+    }
 }

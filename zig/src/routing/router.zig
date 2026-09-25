@@ -61,10 +61,10 @@ pub const SmartRouter = struct {
     pub fn init(allocator: std.mem.Allocator, learner: *learner_mod.LearnerSet, default_action: []const u8, mesh_sub: []const u8) SmartRouter {
         return .{
             .allocator = allocator,
-            .direct_cidrs = std.ArrayList(Cidr){ .items = &.{}, .capacity = 0 },
-            .direct_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 },
-            .blocked_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 },
-            .routed_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 },
+            .direct_cidrs = .empty,
+            .direct_domains = .empty,
+            .blocked_domains = .empty,
+            .routed_domains = .empty,
             .mesh_subnet = parseCidr(mesh_sub) orelse Cidr{ .net = 0x0a2a0000, .mask = 0xffff0000 },
             .default_mesh = std.mem.eql(u8, default_action, "tunnel") or std.mem.eql(u8, default_action, "mesh"),
             .learner = learner,

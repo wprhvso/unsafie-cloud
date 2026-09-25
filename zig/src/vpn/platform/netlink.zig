@@ -47,7 +47,7 @@ pub const rtattr = extern struct {
 };
 
 pub const Uplink = struct {
-    iface: [16]u8 = [_]u8{0} ** 16,
+    iface: [16]u8 = std.mem.zeroes([16]u8),
     iface_len: usize = 0,
     gateway: u32 = 0,
     ifindex: i32 = -1,
@@ -86,7 +86,7 @@ pub const Netlink = struct {
                 if ((flags & 0x0002) != 0) {
                     const gw_int = std.fmt.parseInt(u32, gw, 16) catch continue;
                     var up = Uplink{
-                        .iface = [_]u8{0} ** 16,
+                        .iface = std.mem.zeroes([16]u8),
                         .gateway = @byteSwap(gw_int),
                         .iface_len = @min(iface.len, 15),
                         .ifindex = -1,
@@ -107,9 +107,9 @@ pub const Netlink = struct {
         defer std.posix.close(sock);
 
         var ifr: extern struct {
-            name: [16]u8 = [_]u8{0} ** 16,
+            name: [16]u8 = std.mem.zeroes([16]u8),
             ifindex: c_int = 0,
-            padding: [20]u8 = [_]u8{0} ** 20,
+            padding: [20]u8 = std.mem.zeroes([20]u8),
         } = .{};
 
         const copy_len = @min(ifname.len, 15);
@@ -127,7 +127,7 @@ pub const Netlink = struct {
         defer std.posix.close(sock);
 
         var ifr: extern struct {
-            name: [16]u8 = [_]u8{0} ** 16,
+            name: [16]u8 = std.mem.zeroes([16]u8),
             data: extern union {
                 flags: c_short,
                 mtu: c_int,
@@ -150,14 +150,14 @@ pub const Netlink = struct {
         defer std.posix.close(sock);
 
         var ifr: extern struct {
-            name: [16]u8 = [_]u8{0} ** 16,
+            name: [16]u8 = std.mem.zeroes([16]u8),
             addr: extern struct {
                 family: u16 = 2,
                 port: u16 = 0,
                 ip: u32 = 0,
-                zero: [8]u8 = [_]u8{0} ** 8,
+                zero: [8]u8 = std.mem.zeroes([8]u8),
             } = .{},
-            padding: [8]u8 = [_]u8{0} ** 8,
+            padding: [8]u8 = std.mem.zeroes([8]u8),
         } = .{};
 
         const copy_len = @min(ifname.len, 15);
@@ -178,7 +178,7 @@ pub const Netlink = struct {
         const sock = std.posix.socket(AF_NETLINK, std.posix.SOCK.RAW, NETLINK_ROUTE) catch return;
         defer std.posix.close(sock);
 
-        var buf = [_]u8{0} ** 512;
+        var buf = std.mem.zeroes([512]u8);
         var offset: usize = 0;
 
         const hdr_len = @sizeOf(nlmsghdr);
@@ -229,7 +229,7 @@ pub const Netlink = struct {
         const sock = std.posix.socket(AF_NETLINK, std.posix.SOCK.RAW, NETLINK_ROUTE) catch return;
         defer std.posix.close(sock);
 
-        var buf = [_]u8{0} ** 512;
+        var buf = std.mem.zeroes([512]u8);
         const hdr_len = @sizeOf(nlmsghdr);
         const rtm_len = @sizeOf(rtmsg);
         var offset: usize = hdr_len + rtm_len;
@@ -280,7 +280,7 @@ pub const Netlink = struct {
     }
 
     fn formatIp(ip: u32) [16]u8 {
-        var buf = [_]u8{0} ** 16;
+        var buf = std.mem.zeroes([16]u8);
         _ = std.fmt.bufPrint(&buf, "{d}.{d}.{d}.{d}", .{
             (ip >> 24) & 0xff,
             (ip >> 16) & 0xff,

@@ -1,4 +1,6 @@
 const std = @import("std");
+const linux = std.os.linux;
+const sys = @import("../sys.zig");
 const config_mod = @import("../config.zig");
 const crypto_mod = @import("crypto.zig");
 const protocol_mod = @import("protocol.zig");
@@ -30,16 +32,16 @@ pub const AmneziaEngine = struct {
     router: router_mod.SmartRouter,
     learner: learner_mod.LearnerSet,
     dns_srv: dns_mod.DnsServer,
-    peers: std.ArrayList(*peer_mod.PeerSession),
-    udp_socket: std.posix.fd_t = -1,
+    peers: std.ArrayList(*peer_mod.PeerSession) = .empty,
+    udp_socket: i32 = -1,
     running: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
-    threads: [4]?std.Thread = [_]?std.Thread{null} ** 4,
-    local_private_key: [32]u8 = [_]u8{0} ** 32,
-    local_public_key: [32]u8 = [_]u8{0} ** 32,
+    threads: [4]?std.Thread = .{ null, null, null, null },
+    local_private_key: [32]u8 = @as([32]u8, @splat(0)),
+    local_public_key: [32]u8 = @as([32]u8, @splat(0)),
     amnezia_params: protocol_mod.AmneziaParams = .{},
     mutex: SpinLock = .{},
     active_server_idx: usize = 0,
-    server_addr: ?std.net.Address = null,
+    server_addr: ?protocol_mod.SocketAddress = null,
     next_client_ip: std.atomic.Value(u32) = std.atomic.Value(u32).init(0x0a2a0002),
     assigned_vpn_ip: u32 = 0x0a2a0002,
 
@@ -48,7 +50,7 @@ pub const AmneziaEngine = struct {
         return createEngine(allocator, config_path, initial_config, tun_dev);
     }
 
-    pub fn initWithFd(allocator: std.mem.Allocator, config_path: ?[]const u8, initial_config: config_mod.FullConfig, tun_fd: std.posix.fd_t) !*AmneziaEngine {
+    pub fn initWithFd(allocator: std.mem.Allocator, config_path: ?[]const u8, initial_config: config_mod.FullConfig, tun_fd: i32) !*AmneziaEngine {
         const tun_dev = tun_mod.TunDevice.initWithFd(allocator, tun_fd);
         return createEngine(allocator, config_path, initial_config, tun_dev);
     }
@@ -86,12 +88,12 @@ pub const AmneziaEngine = struct {
             .router = router,
             .learner = learner,
             .dns_srv = dns_srv,
-            .peers = std.ArrayList(*peer_mod.PeerSession){ .items = &.{}, .capacity = 0 },
+            .peers = .empty,
             .udp_socket = -1,
             .running = std.atomic.Value(bool).init(false),
-            .threads = [_]?std.Thread{null} ** 4,
-            .local_private_key = [_]u8{0} ** 32,
-            .local_public_key = [_]u8{0} ** 32,
+            .threads = .{ null, null, null, null },
+            .local_private_key = @as([32]u8, @splat(0)),
+            .local_public_key = @as([32]u8, @splat(0)),
             .amnezia_params = .{
                 .jc = initial_config.amnezia.jc,
                 .jmin = initial_config.amnezia.jmin,
@@ -109,9 +111,13 @@ pub const AmneziaEngine = struct {
             .assigned_vpn_ip = 0x0a2a0002,
         };
 
-        const keypair = std.crypto.dh.X25519.KeyPair.generate();
-        self.local_private_key = keypair.secret_key;
-        self.local_public_key = keypair.public_key;
+        var priv: [32]u8 = undefined;
+        sys.getRandomBytes(&priv);
+        priv[0] &= 248;
+        priv[31] = (priv[31] & 127) | 64;
+        const pubkey = std.crypto.dh.X25519.recoverPublicKey(priv) catch @as([32]u8, @splat(0));
+        self.local_private_key = priv;
+        self.local_public_key = pubkey;
 
         try self.applyConfig();
         return self;
@@ -183,14 +189,27 @@ pub const AmneziaEngine = struct {
         if (self.running.load(.seq_cst)) return;
 
         const port = if (self.config.node.mode == .server) self.config.node.listen_port else 0;
-        const bind_addr = std.net.Address.initIp4([_]u8{0} ** 4, port);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        const sock: i32 = @intCast(sock_rc);
+        if (sock < 0) return error.SocketFailed;
 
-        const sock = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0);
+        var sa: linux.sockaddr.in = undefined;
+        sa.family = linux.AF.INET;
+        sa.port = std.mem.nativeToBig(u16, port);
+        sa.addr = 0;
 
         const reuse: c_int = 1;
-        _ = std.posix.setsockopt(sock, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, std.mem.asBytes(&reuse)) catch {};
+        _ = linux.setsockopt(sock, linux.SOL.SOCKET, linux.SO.REUSEADDR, @ptrCast(&reuse), @sizeOf(c_int));
 
-        try std.posix.bind(sock, &bind_addr.any, bind_addr.getOsSockLen());
+        if (linux.bind(sock, @ptrCast(&sa), @sizeOf(linux.sockaddr.in)) != 0) {
+            sa.addr = 0;
+            sa.port = 0;
+            if (linux.bind(sock, @ptrCast(&sa), @sizeOf(linux.sockaddr.in)) != 0) {
+                _ = linux.close(sock);
+                return error.BindFailed;
+            }
+        }
+
         self.udp_socket = sock;
         self.running.store(true, .seq_cst);
 
@@ -217,7 +236,7 @@ pub const AmneziaEngine = struct {
         if (self.udp_socket >= 0) {
             const sock = self.udp_socket;
             self.udp_socket = -1;
-            std.posix.close(sock);
+            _ = linux.close(sock);
         }
 
         for (&self.threads) |*opt_t| {
@@ -249,7 +268,10 @@ pub const AmneziaEngine = struct {
         }
 
         if (router_mod.parseIpv4(host)) |hip| {
-            self.server_addr = std.net.Address.initIp4(@as([4]u8, @bitCast(std.mem.nativeToBig(u32, hip))), port);
+            self.server_addr = protocol_mod.SocketAddress.initIp4(
+                @as([4]u8, @bitCast(std.mem.nativeToBig(u32, hip))),
+                port,
+            );
         }
     }
 
@@ -257,29 +279,40 @@ pub const AmneziaEngine = struct {
         const dest = self.server_addr orelse return;
 
         var tx_id: [12]u8 = undefined;
-        std.crypto.random.bytes(&tx_id);
+        sys.getRandomBytes(&tx_id);
 
         var stun_req: [32]u8 = undefined;
         const req_len = protocol_mod.buildStunRequest(&stun_req, tx_id) catch return;
 
-        const stun_sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch return;
-        defer std.posix.close(stun_sock);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        const stun_sock: i32 = @intCast(sock_rc);
+        if (stun_sock < 0) return;
+        defer _ = linux.close(stun_sock);
 
-        const timeout = std.posix.timeval{ .sec = 1, .usec = 0 };
-        _ = std.posix.setsockopt(stun_sock, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&timeout)) catch {};
-
+        var dest_sa = dest.toLinuxSockaddr();
         var attempts: usize = 0;
         while (attempts < 3 and self.running.load(.seq_cst)) : (attempts += 1) {
-            _ = std.posix.sendto(
+            _ = linux.sendto(
                 stun_sock,
-                stun_req[0..req_len],
+                stun_req[0..req_len].ptr,
+                req_len,
                 0,
-                &dest.any,
-                dest.getOsSockLen(),
-            ) catch {};
+                @ptrCast(&dest_sa),
+                @sizeOf(linux.sockaddr.in),
+            );
+
+            var pfd = [1]linux.pollfd{.{
+                .fd = stun_sock,
+                .events = linux.POLL.IN,
+                .revents = 0,
+            }};
+            if (linux.poll(&pfd, 1, 1000) <= 0) continue;
 
             var resp_buf: [64]u8 = undefined;
-            const n = std.posix.recv(stun_sock, &resp_buf, 0) catch continue;
+            const n_rc = linux.read(stun_sock, resp_buf[0..].ptr, resp_buf.len);
+            if (n_rc < 22) continue;
+            const n: usize = @intCast(n_rc);
+
             if (protocol_mod.parseStunResponse(resp_buf[0..n], tx_id)) |stun_res| {
                 const is_ru = self.router.rules_engine.matchIp(stun_res.ip);
                 self.router.is_russian_client = is_ru;
@@ -299,10 +332,10 @@ pub const AmneziaEngine = struct {
             self.amnezia_params.jmax,
         );
 
-        const enc_static = [_]u8{0} ** 48;
-        const enc_ts = [_]u8{0} ** 28;
-        var mac1 = [_]u8{0} ** 16;
-        const mac2 = [_]u8{0} ** 16;
+        const enc_static = @as([48]u8, @splat(0));
+        const enc_ts = @as([28]u8, @splat(0));
+        var mac1 = @as([16]u8, @splat(0));
+        const mac2 = @as([16]u8, @splat(0));
 
         const effective_token = if (self.config.node.token.len > 0) self.config.node.token else self.config.amnezia.psk;
         crypto_mod.computeMac(&mac1, &self.local_public_key, effective_token);
@@ -319,13 +352,15 @@ pub const AmneziaEngine = struct {
             mac2,
         ) catch return;
 
-        _ = std.posix.sendto(
+        var dest_sa = dest.toLinuxSockaddr();
+        _ = linux.sendto(
             self.udp_socket,
-            init_buf[0..total_len],
+            init_buf[0..total_len].ptr,
+            total_len,
             0,
-            &dest.any,
-            dest.getOsSockLen(),
-        ) catch {};
+            @ptrCast(&dest_sa),
+            @sizeOf(linux.sockaddr.in),
+        );
     }
 
     fn udpLoop(self: *AmneziaEngine) void {
@@ -334,37 +369,39 @@ pub const AmneziaEngine = struct {
         while (self.running.load(.seq_cst)) {
             if (self.udp_socket < 0) break;
 
-            var pfd = [1]std.posix.pollfd{.{
+            var pfd = [1]linux.pollfd{.{
                 .fd = self.udp_socket,
-                .events = std.posix.POLL.IN,
+                .events = linux.POLL.IN,
                 .revents = 0,
             }};
-            const rc = std.posix.poll(&pfd, 50) catch break;
-            if (rc == 0 or (pfd[0].revents & std.posix.POLL.IN) == 0) continue;
+            const rc = linux.poll(&pfd, 1, 50);
+            if (rc <= 0 or (pfd[0].revents & linux.POLL.IN) == 0) continue;
 
-            var src_addr: std.posix.sockaddr.in = undefined;
-            var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.in);
+            var src_addr: linux.sockaddr.in = undefined;
+            var addr_len: linux.socklen_t = @sizeOf(linux.sockaddr.in);
 
-            const n = std.posix.recvfrom(
+            const n_rc = linux.recvfrom(
                 self.udp_socket,
-                &buf,
+                buf[0..].ptr,
+                buf.len,
                 0,
                 @ptrCast(&src_addr),
                 &addr_len,
-            ) catch {
-                if (!self.running.load(.seq_cst)) break;
-                continue;
+            );
+            if (n_rc < 4) continue;
+            const n: usize = @intCast(n_rc);
+
+            const ep = protocol_mod.SocketAddress{
+                .ip = @bitCast(src_addr.addr),
+                .port = std.mem.bigToNative(u16, src_addr.port),
             };
-
-            if (n < 4) continue;
-
-            const ep = std.net.Address{ .in = .{ .sa = src_addr } };
             self.handleInboundUdp(buf[0..n], ep);
         }
     }
 
-    fn handleInboundUdp(self: *AmneziaEngine, packet: []const u8, src_addr: std.net.Address) void {
+    fn handleInboundUdp(self: *AmneziaEngine, packet: []const u8, src_addr: protocol_mod.SocketAddress) void {
         const ptype = protocol_mod.identifyPacket(packet, self.amnezia_params);
+        var src_sa = src_addr.toLinuxSockaddr();
 
         switch (ptype) {
             .stun_req => {
@@ -372,19 +409,20 @@ pub const AmneziaEngine = struct {
                 var tx_id: [12]u8 = undefined;
                 @memcpy(&tx_id, packet[4..16]);
 
-                const client_ip = std.mem.bigToNative(u32, @as(u32, @bitCast(src_addr.in.sa.addr)));
-                const client_port = std.mem.bigToNative(u16, src_addr.in.sa.port);
+                const client_ip = std.mem.bigToNative(u32, @as(u32, @bitCast(src_sa.addr)));
+                const client_port = std.mem.bigToNative(u16, src_sa.port);
 
                 var stun_resp: [32]u8 = undefined;
                 const resp_len = protocol_mod.buildStunResponse(&stun_resp, tx_id, client_ip, client_port) catch return;
 
-                _ = std.posix.sendto(
+                _ = linux.sendto(
                     self.udp_socket,
-                    stun_resp[0..resp_len],
+                    stun_resp[0..resp_len].ptr,
+                    resp_len,
                     0,
-                    &src_addr.any,
-                    src_addr.getOsSockLen(),
-                ) catch {};
+                    @ptrCast(&src_sa),
+                    @sizeOf(linux.sockaddr.in),
+                );
             },
             .stun_resp => {},
             .handshake_init => {
@@ -396,7 +434,7 @@ pub const AmneziaEngine = struct {
                 @memcpy(&client_pub, packet[8..40]);
 
                 const mac1 = packet[116..132];
-                var expected_mac: [16]u8 = undefined;
+                var expected_mac = @as([16]u8, @splat(0));
                 const effective_token = if (self.config.node.client_token.len > 0) self.config.node.client_token else self.config.amnezia.psk;
                 crypto_mod.computeMac(&expected_mac, &client_pub, effective_token);
 
@@ -443,9 +481,9 @@ pub const AmneziaEngine = struct {
                     1,
                     sender_idx,
                     self.local_public_key,
-                    [_]u8{0} ** 16,
-                    [_]u8{0} ** 16,
-                    [_]u8{0} ** 16,
+                    @as([16]u8, @splat(0)),
+                    @as([16]u8, @splat(0)),
+                    @as([16]u8, @splat(0)),
                 ) catch return;
 
                 protocol_mod.sendJunkPackets(
@@ -456,13 +494,14 @@ pub const AmneziaEngine = struct {
                     self.amnezia_params.jmax,
                 );
 
-                _ = std.posix.sendto(
+                _ = linux.sendto(
                     self.udp_socket,
-                    resp_buf[0..resp_len],
+                    resp_buf[0..resp_len].ptr,
+                    resp_len,
                     0,
-                    &src_addr.any,
-                    src_addr.getOsSockLen(),
-                ) catch {};
+                    @ptrCast(&src_sa),
+                    @sizeOf(linux.sockaddr.in),
+                );
             },
             .handshake_resp => {
                 if (packet.len < 92) return;
@@ -472,7 +511,7 @@ pub const AmneziaEngine = struct {
                         server_peer.* = peer_mod.PeerSession{
                             .name = "server",
                             .role = "server",
-                            .public_key = [_]u8{0} ** 32,
+                            .public_key = @as([32]u8, @splat(0)),
                             .endpoint = src_addr,
                             .allowed_ip = 0,
                             .allowed_mask = 0,
@@ -496,7 +535,7 @@ pub const AmneziaEngine = struct {
                 const ciphertext = packet[16..tag_idx];
                 const tag = packet[tag_idx..packet.len][0..16].*;
 
-                var nonce = [_]u8{0} ** 12;
+                var nonce = @as([12]u8, @splat(0));
                 std.mem.writeInt(u64, nonce[4..12][0..8], counter, .little);
 
                 const effective_token = if (self.config.node.token.len > 0)
@@ -506,7 +545,7 @@ pub const AmneziaEngine = struct {
                 else
                     self.config.amnezia.psk;
 
-                var psk_key = [_]u8{0} ** 32;
+                var psk_key = @as([32]u8, @splat(0));
                 @memcpy(psk_key[0..@min(effective_token.len, 32)], effective_token[0..@min(effective_token.len, 32)]);
 
                 var decrypted_buf: [2048]u8 = undefined;
@@ -548,17 +587,19 @@ pub const AmneziaEngine = struct {
         defer self.mutex.unlock();
 
         var reload_buf: [32]u8 = undefined;
-        const total = protocol_mod.buildPushReload(&reload_buf, std.time.timestamp()) catch return;
+        const total = protocol_mod.buildPushReload(&reload_buf, sys.timestamp()) catch return;
 
         for (self.peers.items) |p| {
             if (p.endpoint) |ep| {
-                _ = std.posix.sendto(
+                var ep_sa = ep.toLinuxSockaddr();
+                _ = linux.sendto(
                     self.udp_socket,
-                    reload_buf[0..total],
+                    reload_buf[0..total].ptr,
+                    total,
                     0,
-                    &ep.any,
-                    ep.getOsSockLen(),
-                ) catch {};
+                    @ptrCast(&ep_sa),
+                    @sizeOf(linux.sockaddr.in),
+                );
             }
         }
     }
@@ -569,7 +610,7 @@ pub const AmneziaEngine = struct {
         while (self.running.load(.seq_cst)) {
             const n = self.tun.readPacket(&buf) catch {
                 if (!self.running.load(.seq_cst)) break;
-                std.Thread.sleep(10 * std.time.ns_per_ms);
+                sys.sleepMs(10);
                 continue;
             };
 
@@ -607,10 +648,10 @@ pub const AmneziaEngine = struct {
         }
 
         const peer = target_peer orelse return;
-        const dest_ep = peer.endpoint orelse return;
+        const dest = peer.endpoint orelse return;
 
         const counter = peer.tx_counter.fetchAdd(1, .monotonic);
-        var nonce = [_]u8{0} ** 12;
+        var nonce = @as([12]u8, @splat(0));
         std.mem.writeInt(u64, nonce[4..12][0..8], counter, .little);
 
         var ciphertext_buf: [2048]u8 = undefined;
@@ -624,7 +665,7 @@ pub const AmneziaEngine = struct {
         else
             self.config.amnezia.psk;
 
-        var psk_key = [_]u8{0} ** 32;
+        var psk_key = @as([32]u8, @splat(0));
         @memcpy(psk_key[0..@min(effective_token.len, 32)], effective_token[0..@min(effective_token.len, 32)]);
 
         crypto_mod.encryptPayload(ciphertext_buf[0..ip_packet.len], &tag, ip_packet, nonce, psk_key);
@@ -639,13 +680,15 @@ pub const AmneziaEngine = struct {
             tag,
         ) catch return;
 
-        _ = std.posix.sendto(
+        var dest_sa = dest.toLinuxSockaddr();
+        _ = linux.sendto(
             self.udp_socket,
-            transport_buf[0..total_len],
+            transport_buf[0..total_len].ptr,
+            total_len,
             0,
-            &dest_ep.any,
-            dest_ep.getOsSockLen(),
-        ) catch {};
+            @ptrCast(&dest_sa),
+            @sizeOf(linux.sockaddr.in),
+        );
 
         peer.recordTx(total_len);
     }
@@ -655,7 +698,7 @@ pub const AmneziaEngine = struct {
         while (self.running.load(.seq_cst)) {
             var s: usize = 0;
             while (s < 20 and self.running.load(.seq_cst)) : (s += 1) {
-                std.Thread.sleep(50 * std.time.ns_per_ms);
+                sys.sleepMs(50);
             }
             if (!self.running.load(.seq_cst)) break;
 
@@ -677,15 +720,17 @@ pub const AmneziaEngine = struct {
                                 p.receiver_index,
                                 p.tx_counter.fetchAdd(1, .monotonic),
                                 "",
-                                [_]u8{0} ** 16,
+                                @as([16]u8, @splat(0)),
                             ) catch continue;
-                            _ = std.posix.sendto(
+                            var ep_sa = ep.toLinuxSockaddr();
+                            _ = linux.sendto(
                                 self.udp_socket,
-                                keepalive_buf[0..total_len],
+                                keepalive_buf[0..total_len].ptr,
+                                total_len,
                                 0,
-                                &ep.any,
-                                ep.getOsSockLen(),
-                            ) catch {};
+                                @ptrCast(&ep_sa),
+                                @sizeOf(linux.sockaddr.in),
+                            );
                         }
                     }
                 }

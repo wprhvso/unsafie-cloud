@@ -1,8 +1,27 @@
 const std = @import("std");
+const linux = std.os.linux;
+const sys = @import("../sys.zig");
 
 pub const STUN_MAGIC: u32 = 0x5354554e;
 pub const PUSH_MAGIC: u32 = 0x50555348;
 pub const SYNC_MAGIC: u32 = 0x53594e43;
+
+pub const SocketAddress = struct {
+    ip: [4]u8 = @as([4]u8, @splat(0)),
+    port: u16 = 0,
+
+    pub fn initIp4(ip_bytes: [4]u8, p: u16) SocketAddress {
+        return .{ .ip = ip_bytes, .port = p };
+    }
+
+    pub fn toLinuxSockaddr(self: SocketAddress) linux.sockaddr.in {
+        var sa: linux.sockaddr.in = undefined;
+        sa.family = linux.AF.INET;
+        sa.port = std.mem.nativeToBig(u16, self.port);
+        sa.addr = @bitCast(self.ip);
+        return sa;
+    }
+};
 
 pub const AmneziaParams = struct {
     jc: u32 = 4,
@@ -46,8 +65,8 @@ pub fn identifyPacket(packet: []const u8, params: AmneziaParams) PacketType {
 }
 
 pub fn sendJunkPackets(
-    sock: std.posix.fd_t,
-    dest: std.net.Address,
+    sock: i32,
+    dest: SocketAddress,
     count: u32,
     min_size: u32,
     max_size: u32,
@@ -57,12 +76,15 @@ pub fn sendJunkPackets(
     const clamped_max = @min(1420, @max(clamped_min, max_size));
     var junk_buf: [1420]u8 = undefined;
 
+    var sa = dest.toLinuxSockaddr();
     var i: u32 = 0;
     while (i < count) : (i += 1) {
         const span = clamped_max - clamped_min + 1;
-        const rand_size = clamped_min + (std.crypto.random.int(u32) % span);
-        std.crypto.random.bytes(junk_buf[0..rand_size]);
-        _ = std.posix.sendto(sock, junk_buf[0..rand_size], 0, &dest.any, dest.getOsSockLen()) catch {};
+        var rand_u32: u32 = undefined;
+        sys.getRandomBytes(std.mem.asBytes(&rand_u32));
+        const rand_size = clamped_min + (rand_u32 % span);
+        sys.getRandomBytes(junk_buf[0..rand_size]);
+        _ = linux.sendto(sock, junk_buf[0..rand_size].ptr, rand_size, 0, @ptrCast(&sa), @sizeOf(linux.sockaddr.in));
     }
 }
 
@@ -114,7 +136,7 @@ pub fn buildHandshakeInit(
     @memcpy(out[132..148], &mac2);
 
     if (params.s1 > 0) {
-        std.crypto.random.bytes(out[148..total_len]);
+        sys.getRandomBytes(out[148..total_len]);
     }
 
     return total_len;
@@ -142,7 +164,7 @@ pub fn buildHandshakeResp(
     @memcpy(out[76..92], &mac2);
 
     if (params.s2 > 0) {
-        std.crypto.random.bytes(out[92..total_len]);
+        sys.getRandomBytes(out[92..total_len]);
     }
 
     return total_len;

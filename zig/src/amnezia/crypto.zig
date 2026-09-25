@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub fn derivePublicKey(private_key: [32]u8) [32]u8 {
-    return std.crypto.dh.X25519.recoverPublicKey(private_key) catch [_]u8{0} ** 32;
+    return std.crypto.dh.X25519.recoverPublicKey(private_key) catch std.mem.zeroes([32]u8);
 }
 
 pub fn computeSharedSecret(private_key: [32]u8, public_key: [32]u8) ![32]u8 {
@@ -29,7 +29,7 @@ pub fn computeMac(out: *[16]u8, data: []const u8, key: []const u8) void {
 }
 
 pub fn parseKey(str: []const u8) [32]u8 {
-    var out = [_]u8{0} ** 32;
+    var out = std.mem.zeroes([32]u8);
     if (str.len == 64) {
         if (std.fmt.hexToBytes(&out, str)) |_| {
             return out;

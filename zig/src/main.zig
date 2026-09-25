@@ -1,34 +1,21 @@
 const std = @import("std");
+const linux = std.os.linux;
 const config_mod = @import("config.zig");
 const engine_mod = @import("amnezia/engine.zig");
 const protocol_mod = @import("amnezia/protocol.zig");
 const router_mod = @import("routing/router.zig");
 const learner_mod = @import("routing/learner.zig");
 const rules_mod = @import("routing/rules.zig");
-
-const Gpa = if (@hasDecl(std.heap, "GeneralPurposeAllocator"))
-    std.heap.GeneralPurposeAllocator(.{})
-else if (@hasDecl(std.heap, "DebugAllocator"))
-    std.heap.DebugAllocator(.{})
-else
-    struct {
-        pub fn allocator(self: *@This()) std.mem.Allocator {
-            _ = self;
-            return std.heap.page_allocator;
-        }
-        pub fn deinit(self: *@This()) void {
-            _ = self;
-        }
-    };
+const sys = @import("sys.zig");
 
 var should_exit = std.atomic.Value(bool).init(false);
 var signal_count = std.atomic.Value(u8).init(0);
 
-fn handleSignal(sig: i32) callconv(.c) void {
+fn handleSignal(sig: linux.SIG) callconv(.c) void {
     _ = sig;
     const prev = signal_count.fetchAdd(1, .seq_cst);
     if (prev >= 1) {
-        std.posix.exit(130);
+        linux.exit(130);
     }
     should_exit.store(true, .seq_cst);
 }
@@ -44,24 +31,20 @@ fn setupSignals() void {
 }
 
 fn jsonLog(level: []const u8, subsystem: []const u8, event: []const u8, message: []const u8) void {
-    const ts = std.time.milliTimestamp();
+    const ts = sys.milliTimestamp();
     std.debug.print(
         "{{\"ts\":{d},\"level\":\"{s}\",\"subsystem\":\"{s}\",\"event\":\"{s}\",\"message\":\"{s}\"}}\n",
         .{ ts, level, subsystem, event, message },
     );
 }
 
-pub fn main() !void {
-    var gpa: Gpa = .{};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-
+    var it = init.minimal.args.iterate();
+    _ = it.skip();
     var config_path: []const u8 = "unsafie.yaml";
-    if (args.len > 1) {
-        const arg = args[1];
+    if (it.next()) |arg| {
         if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             std.debug.print("Usage: unsafie [path/to/unsafie.yaml]\n", .{});
             return;
@@ -91,7 +74,7 @@ pub fn main() !void {
     jsonLog("INFO", "amnezia", "running", "AmneziaWG node active with in-memory state and smart routing");
 
     while (!should_exit.load(.seq_cst)) {
-        std.Thread.sleep(20 * std.time.ns_per_ms);
+        sys.sleepMs(20);
     }
 
     jsonLog("INFO", "bootstrap", "stopping", "Stopping unsafie node");
