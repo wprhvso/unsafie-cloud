@@ -1,5 +1,6 @@
 const std = @import("std");
 const learner_mod = @import("learner.zig");
+const rules_mod = @import("rules.zig");
 
 pub const Cidr = struct {
     net: u32,
@@ -54,6 +55,8 @@ pub const SmartRouter = struct {
     mesh_subnet: Cidr,
     default_mesh: bool,
     learner: *learner_mod.LearnerSet,
+    rules_engine: rules_mod.RulesEngine,
+    is_russian_client: bool = false,
 
     pub fn init(allocator: std.mem.Allocator, learner: *learner_mod.LearnerSet, default_action: []const u8, mesh_sub: []const u8) SmartRouter {
         return .{
@@ -65,6 +68,8 @@ pub const SmartRouter = struct {
             .mesh_subnet = parseCidr(mesh_sub) orelse Cidr{ .net = 0x0a2a0000, .mask = 0xffff0000 },
             .default_mesh = std.mem.eql(u8, default_action, "tunnel") or std.mem.eql(u8, default_action, "mesh"),
             .learner = learner,
+            .rules_engine = rules_mod.RulesEngine.initDefault(),
+            .is_russian_client = false,
         };
     }
 
@@ -121,9 +126,17 @@ pub const SmartRouter = struct {
             for (self.routed_domains.items) |pattern| {
                 if (matchesDomain(pattern, d)) return .mesh;
             }
+            if (self.is_russian_client and self.rules_engine.matchDomain(d)) {
+                self.learner.learn(dst_ip) catch {};
+                return .direct;
+            }
         }
 
         if (self.learner.has(dst_ip)) return .direct;
+
+        if (self.is_russian_client and self.rules_engine.matchIp(dst_ip)) {
+            return .direct;
+        }
 
         if (self.mesh_subnet.matches(dst_ip)) return .mesh;
 

@@ -5,6 +5,19 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const is_android = target.result.abi.isAndroid();
 
+    const gen_rules_exe = b.addExecutable(.{
+        .name = "gen_rules",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/gen_rules.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
+    });
+    const gen_rules_cmd = b.addRunArtifact(gen_rules_exe);
+    gen_rules_cmd.addArgs(&[_][]const u8{"src/routing/rules.bin"});
+    const gen_rules_step = b.step("gen-rules", "Generate rules.bin database");
+    gen_rules_step.dependOn(&gen_rules_cmd.step);
+
     if (!is_android) {
         const exe = b.addExecutable(.{
             .name = "unsafie",

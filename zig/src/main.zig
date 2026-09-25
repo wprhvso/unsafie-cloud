@@ -4,7 +4,7 @@ const engine_mod = @import("amnezia/engine.zig");
 const protocol_mod = @import("amnezia/protocol.zig");
 const router_mod = @import("routing/router.zig");
 const learner_mod = @import("routing/learner.zig");
-const sync_mod = @import("sync/mesh_sync.zig");
+const rules_mod = @import("routing/rules.zig");
 
 var should_exit = std.atomic.Value(bool).init(false);
 
@@ -50,7 +50,7 @@ pub fn main() !void {
     }
 
     setupSignals();
-    jsonLog("INFO", "bootstrap", "starting", "Initializing unsafie in-memory node");
+    jsonLog("INFO", "bootstrap", "starting", "Initializing unsafie node");
 
     const cfg = config_mod.loadFromFile(allocator, config_path) catch |err| {
         jsonLog("ERROR", "config", "load_failed", @errorName(err));
@@ -79,132 +79,79 @@ pub fn main() !void {
     jsonLog("INFO", "bootstrap", "stopped", "Unsafie stopped cleanly");
 }
 
-test "config roundtrip" {
-    const sample =
-        \\metadata:
-        \\  version: 1
-        \\  timestamp: 1727210000
-        \\  updated_by: "test-node"
-        \\
-        \\node:
-        \\  name: "test-node"
-        \\  role: "admin"
-        \\  listen_port: 51820
-        \\  vpn_ip: "10.42.0.1"
-        \\
-        \\amnezia:
-        \\  jc: 4
-        \\  jmin: 40
-        \\  jmax: 70
-        \\  s1: 64
-        \\  s2: 48
-        \\  h1: 1287634912
-        \\  h2: 837194625
-        \\  h3: 1092837465
-        \\  h4: 1982736450
-        \\  psk: "test_psk"
-        \\
-        \\roles:
-        \\  - name: "admin"
-        \\    permissions:
-        \\      - "sync_config"
-        \\      - "route_all"
-        \\
-        \\peers:
-        \\  - name: "peer1"
-        \\    role: "client"
-        \\    public_key: "abc123"
-        \\    endpoint: "1.2.3.4:51820"
-        \\    can_sync_config: false
-        \\    persistent_keepalive: 25
-        \\    allowed_ips:
-        \\      - "10.42.0.2/32"
-        \\
-        \\routing:
-        \\  default_action: "tunnel"
-        \\  direct_domains:
-        \\    - "*.ru"
-        \\  direct_cidrs:
-        \\    - "10.0.0.0/8"
-        \\  blocked_domains:
-        \\    - "ads.example.com"
-        \\  routed_domains:
-        \\    - "*.internal"
-        \\
-        \\dns:
-        \\  listen: "10.42.0.1:53"
-        \\  upstreams:
-        \\    - "1.1.1.1:53"
-        \\  hosts:
-        \\    - name: "node1.internal"
-        \\      ip: "10.42.0.1"
-    ;
+test "stun building and parsing" {
+    var tx: [12]u8 = undefined;
+    @memcpy(&tx, "1234567890ab");
 
-    var cfg1 = try config_mod.parseYaml(std.testing.allocator, sample);
-    defer cfg1.deinit();
+    var req_buf: [32]u8 = undefined;
+    const req_len = try protocol_mod.buildStunRequest(&req_buf, tx);
+    try std.testing.expectEqual(@as(usize, 16), req_len);
 
-    var buf = std.ArrayList(u8){};
-    defer buf.deinit(std.testing.allocator);
-    try cfg1.serialize(buf.writer(std.testing.allocator));
+    var resp_buf: [32]u8 = undefined;
+    const resp_len = try protocol_mod.buildStunResponse(&resp_buf, tx, 0x4d583737, 51820);
+    try std.testing.expectEqual(@as(usize, 22), resp_len);
 
-    var cfg2 = try config_mod.parseYaml(std.testing.allocator, buf.items);
-    defer cfg2.deinit();
-
-    try std.testing.expectEqual(cfg1.metadata.version, cfg2.metadata.version);
-    try std.testing.expectEqual(cfg1.metadata.timestamp, cfg2.metadata.timestamp);
-    try std.testing.expectEqualStrings(cfg1.node.name, cfg2.node.name);
-    try std.testing.expectEqual(cfg1.amnezia.h1, cfg2.amnezia.h1);
-    try std.testing.expectEqual(cfg1.roles.len, cfg2.roles.len);
-    try std.testing.expectEqual(cfg1.peers.len, cfg2.peers.len);
+    const parsed = protocol_mod.parseStunResponse(resp_buf[0..resp_len], tx);
+    try std.testing.expect(parsed != null);
+    try std.testing.expectEqual(@as(u32, 0x4d583737), parsed.?.ip);
+    try std.testing.expectEqual(@as(u16, 51820), parsed.?.port);
 }
 
-test "amnezia packet identification" {
-    const params = protocol_mod.AmneziaParams{
-        .h1 = 0x11111111,
-        .h2 = 0x22222222,
-        .h3 = 0x33333333,
-        .h4 = 0x44444444,
-    };
+test "rules engine matching" {
+    const re = rules_mod.RulesEngine.initDefault();
+    try std.testing.expect(re.matchDomain("yandex.ru"));
+    try std.testing.expect(re.matchDomain("vk.com"));
+    try std.testing.expect(!re.matchDomain("google.com"));
 
-    var h1_bytes: [4]u8 = undefined;
-    std.mem.writeInt(u32, &h1_bytes, 0x11111111, .little);
-    try std.testing.expectEqual(protocol_mod.PacketType.handshake_init, protocol_mod.identifyPacket(h1_bytes, params));
+    const yandex_ip: u32 = (77 << 24) | (88 << 16) | (55 << 8) | 55;
+    try std.testing.expect(re.matchIp(yandex_ip));
 
-    var h4_bytes: [4]u8 = undefined;
-    std.mem.writeInt(u32, &h4_bytes, 0x44444444, .little);
-    try std.testing.expectEqual(protocol_mod.PacketType.transport_data, protocol_mod.identifyPacket(h4_bytes, params));
-
-    var sync_bytes: [4]u8 = undefined;
-    std.mem.writeInt(u32, &sync_bytes, protocol_mod.SYNC_MAGIC, .little);
-    try std.testing.expectEqual(protocol_mod.PacketType.mesh_sync, protocol_mod.identifyPacket(sync_bytes, params));
+    const cloudflare_ip: u32 = (1 << 24) | (1 << 16) | (1 << 8) | 1;
+    try std.testing.expect(!re.matchIp(cloudflare_ip));
 }
 
-test "smart router decisions" {
+test "smart router variant 3 local check" {
     var learner = learner_mod.LearnerSet.init(std.testing.allocator);
     defer learner.deinit();
 
     var router = router_mod.SmartRouter.init(std.testing.allocator, &learner, "tunnel", "10.42.0.0/16");
     defer router.deinit();
 
-    try router.addDirectCidr("192.168.0.0/16");
-    try router.addDirectDomain("*.ru");
-    try router.addBlockedDomain("adservice.google.com");
+    router.is_russian_client = true;
 
-    const r_direct_cidr = router.decide(router_mod.parseIpv4("192.168.1.1").?, null);
-    try std.testing.expectEqual(router_mod.RouteAction.direct, r_direct_cidr);
-
-    const r_blocked = router.decide(router_mod.parseIpv4("8.8.8.8").?, "adservice.google.com");
-    try std.testing.expectEqual(router_mod.RouteAction.drop, r_blocked);
-
-    const r_ru = router.decide(router_mod.parseIpv4("77.88.55.55").?, "yandex.ru");
+    const yandex_ip: u32 = (77 << 24) | (88 << 16) | (55 << 8) | 55;
+    const r_ru = router.decide(yandex_ip, null);
     try std.testing.expectEqual(router_mod.RouteAction.direct, r_ru);
 
-    const r_ru_learned = router.decide(router_mod.parseIpv4("77.88.55.55").?, null);
-    try std.testing.expectEqual(router_mod.RouteAction.direct, r_ru_learned);
-
-    const r_mesh_internal = router.decide(router_mod.parseIpv4("10.42.0.5").?, null);
-    try std.testing.expectEqual(router_mod.RouteAction.mesh, r_mesh_internal);
-
-    const r_foreign = router.decide(router_mod.parseIpv4("1.1.1.1").?, "foreign.com");
+    const foreign_ip: u32 = (1 << 24) | (1 << 16) | (1 << 8) | 1;
+    const r_foreign = router.decide(foreign_ip, null);
     try std.testing.expectEqual(router_mod.RouteAction.mesh, r_foreign);
+}
+
+test "push reload signal" {
+    var buf: [32]u8 = undefined;
+    const len = try protocol_mod.buildPushReload(&buf, 1727210000);
+    try std.testing.expectEqual(@as(usize, 16), len);
+
+    const ptype = protocol_mod.identifyPacket(buf[0..len], .{});
+    try std.testing.expectEqual(protocol_mod.PacketType.push_signal, ptype);
+}
+
+test "config token and servers roundtrip" {
+    const sample =
+        \\mode: "client"
+        \\token: "my_secret_token"
+        \\smart_routing: true
+        \\servers:
+        \\  - "198.51.100.1:51820"
+        \\  - "198.51.100.2:51820"
+    ;
+
+    var cfg = try config_mod.parseYaml(std.testing.allocator, sample);
+    defer cfg.deinit();
+
+    try std.testing.expectEqual(config_mod.Mode.client, cfg.node.mode);
+    try std.testing.expectEqualStrings("my_secret_token", cfg.node.token);
+    try std.testing.expectEqual(@as(usize, 2), cfg.node.servers.len);
+    try std.testing.expect(cfg.node.smart_routing);
 }
