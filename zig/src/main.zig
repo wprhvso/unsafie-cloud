@@ -6,6 +6,21 @@ const router_mod = @import("routing/router.zig");
 const learner_mod = @import("routing/learner.zig");
 const rules_mod = @import("routing/rules.zig");
 
+const Gpa = if (@hasDecl(std.heap, "GeneralPurposeAllocator"))
+    std.heap.GeneralPurposeAllocator(.{})
+else if (@hasDecl(std.heap, "DebugAllocator"))
+    std.heap.DebugAllocator(.{})
+else
+    struct {
+        pub fn allocator(self: *@This()) std.mem.Allocator {
+            _ = self;
+            return std.heap.page_allocator;
+        }
+        pub fn deinit(self: *@This()) void {
+            _ = self;
+        }
+    };
+
 var should_exit = std.atomic.Value(bool).init(false);
 var signal_count = std.atomic.Value(u8).init(0);
 
@@ -37,7 +52,7 @@ fn jsonLog(level: []const u8, subsystem: []const u8, event: []const u8, message:
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: Gpa = .{};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
