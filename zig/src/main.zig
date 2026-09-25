@@ -56,12 +56,12 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var args = try std.process.argsWithAllocator(allocator);
-    defer args.deinit();
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
 
-    _ = args.skip();
     var config_path: []const u8 = "unsafie.yaml";
-    if (args.next()) |arg| {
+    if (args.len > 1) {
+        const arg = args[1];
         if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             std.debug.print("Usage: unsafie [path/to/unsafie.yaml]\n", .{});
             return;

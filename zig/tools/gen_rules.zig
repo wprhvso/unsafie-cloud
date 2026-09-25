@@ -81,13 +81,12 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var args = try std.process.argsWithAllocator(allocator);
-    defer args.deinit();
-    _ = args.skip();
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
 
     var out_path: []const u8 = "rules.bin";
-    if (args.next()) |p| {
-        out_path = p;
+    if (args.len > 1) {
+        out_path = args[1];
     }
 
     const default_suffixes = [_][]const u8{
