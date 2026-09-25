@@ -7,6 +7,9 @@ const router_mod = @import("routing/router.zig");
 const learner_mod = @import("routing/learner.zig");
 const rules_mod = @import("routing/rules.zig");
 const sys = @import("sys.zig");
+const log = @import("log.zig");
+
+pub const jsonLog = log.jsonLog;
 
 const SigParam = if (@hasDecl(std.os.linux, "SIG") and @typeInfo(std.os.linux.SIG) == .@"enum")
     std.os.linux.SIG
@@ -20,8 +23,10 @@ fn handleSignal(sig: SigParam) callconv(.c) void {
     _ = sig;
     const prev = signal_count.fetchAdd(1, .seq_cst);
     if (prev >= 1) {
+        log.warn("signal", "force_exit", "Multiple termination signals received, forcing immediate exit");
         linux.exit(130);
     }
+    log.infoFmt("signal", "signal_received", "Termination signal received (count={d}), initiating graceful shutdown", .{prev + 1});
     should_exit.store(true, .seq_cst);
 }
 
@@ -33,14 +38,7 @@ fn setupSignals() void {
     };
     std.posix.sigaction(std.posix.SIG.INT, &act, null);
     std.posix.sigaction(std.posix.SIG.TERM, &act, null);
-}
-
-fn jsonLog(level: []const u8, subsystem: []const u8, event: []const u8, message: []const u8) void {
-    const ts = sys.milliTimestamp();
-    std.debug.print(
-        "{{\"ts\":{d},\"level\":\"{s}\",\"subsystem\":\"{s}\",\"event\":\"{s}\",\"message\":\"{s}\"}}\n",
-        .{ ts, level, subsystem, event, message },
-    );
+    log.debug("signal", "handlers_registered", "Registered POSIX signal handlers for SIGINT and SIGTERM");
 }
 
 pub fn main() !void {
@@ -53,6 +51,7 @@ pub fn main() !void {
             return;
         }
         config_path = arg;
+        log.infoFmt("bootstrap", "cli_config", "Command-line argument specified config path: {s}", .{config_path});
     } else {
         const check_fd = linux.open("unsafie.yaml", .{}, 0);
         if (sys.isSuccess(check_fd)) {
@@ -65,36 +64,37 @@ pub fn main() !void {
                 config_path = "../unsafie.yaml";
             }
         }
+        log.infoFmt("bootstrap", "auto_config", "Auto-detected config path: {s}", .{config_path});
     }
 
     setupSignals();
-    jsonLog("INFO", "bootstrap", "starting", "Initializing unsafie node");
+    log.info("bootstrap", "starting", "Initializing unsafie node");
 
     const cfg = config_mod.loadFromFile(allocator, config_path) catch |err| {
-        jsonLog("ERROR", "config", "load_failed", @errorName(err));
+        log.errFmt("config", "load_failed", "Failed to load config file: {s}", .{@errorName(err)});
         return err;
     };
-    jsonLog("INFO", "config", "loaded", "Configuration loaded into memory");
+    log.info("config", "loaded", "Configuration loaded into memory");
 
     var engine = engine_mod.AmneziaEngine.init(allocator, config_path, cfg) catch |err| {
-        jsonLog("ERROR", "amnezia", "init_failed", @errorName(err));
+        log.errFmt("amnezia", "init_failed", "Failed to initialize engine: {s}", .{@errorName(err)});
         return err;
     };
     defer engine.deinit();
 
     engine.start() catch |err| {
-        jsonLog("ERROR", "amnezia", "start_failed", @errorName(err));
+        log.errFmt("amnezia", "start_failed", "Failed to start engine: {s}", .{@errorName(err)});
         return err;
     };
-    jsonLog("INFO", "amnezia", "running", "AmneziaWG node active with in-memory state and smart routing");
+    log.info("amnezia", "running", "AmneziaWG node active with in-memory state and smart routing");
 
     while (!should_exit.load(.seq_cst)) {
         sys.sleepMs(20);
     }
 
-    jsonLog("INFO", "bootstrap", "stopping", "Stopping unsafie node");
+    log.info("bootstrap", "stopping", "Stopping unsafie node");
     engine.stop();
-    jsonLog("INFO", "bootstrap", "stopped", "Unsafie stopped cleanly");
+    log.info("bootstrap", "stopped", "Unsafie stopped cleanly");
 }
 
 test "stun building and parsing" {
@@ -172,4 +172,11 @@ test "config token and servers roundtrip" {
     try std.testing.expectEqualStrings("my_secret_token", cfg.node.token);
     try std.testing.expectEqual(@as(usize, 2), cfg.node.servers.len);
     try std.testing.expect(cfg.node.smart_routing);
+}
+
+test "json log formatted" {
+    var buf: [512]u8 = undefined;
+    const res = log.formatJsonLog(&buf, 1727210000000, "INFO", "test", "test_event", "Hello \"world\"\n");
+    try std.testing.expect(res != null);
+    try std.testing.expectEqualStrings("{\"ts\":1727210000000,\"level\":\"INFO\",\"subsystem\":\"test\",\"event\":\"test_event\",\"message\":\"Hello \\\"world\\\"\\n\"}\n", res.?);
 }

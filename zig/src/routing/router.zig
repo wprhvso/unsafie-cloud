@@ -1,6 +1,7 @@
 const std = @import("std");
 const learner_mod = @import("learner.zig");
 const rules_mod = @import("rules.zig");
+const log = @import("../log.zig");
 
 pub const Cidr = struct {
     net: u32,
@@ -83,19 +84,23 @@ pub const SmartRouter = struct {
     pub fn addDirectCidr(self: *SmartRouter, cidr_str: []const u8) !void {
         if (parseCidr(cidr_str)) |c| {
             try self.direct_cidrs.append(self.allocator, c);
+            log.debugFmt("router", "rule_added", "Added direct CIDR rule: {s}", .{cidr_str});
         }
     }
 
     pub fn addDirectDomain(self: *SmartRouter, d: []const u8) !void {
         try self.direct_domains.append(self.allocator, d);
+        log.debugFmt("router", "rule_added", "Added direct domain rule: {s}", .{d});
     }
 
     pub fn addBlockedDomain(self: *SmartRouter, d: []const u8) !void {
         try self.blocked_domains.append(self.allocator, d);
+        log.debugFmt("router", "rule_added", "Added blocked domain rule: {s}", .{d});
     }
 
     pub fn addRoutedDomain(self: *SmartRouter, d: []const u8) !void {
         try self.routed_domains.append(self.allocator, d);
+        log.debugFmt("router", "rule_added", "Added routed domain rule: {s}", .{d});
     }
 
     pub fn matchesDomain(pattern: []const u8, domain: []const u8) bool {
@@ -107,39 +112,62 @@ pub const SmartRouter = struct {
     }
 
     pub fn decide(self: *const SmartRouter, dst_ip: u32, domain: ?[]const u8) RouteAction {
-        if ((dst_ip >> 24) == 127) return .direct;
-
-        for (self.direct_cidrs.items) |c| {
-            if (c.matches(dst_ip)) return .direct;
+        if ((dst_ip >> 24) == 127) {
+            log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} action=direct reason=loopback", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff });
+            return .direct;
         }
 
-        if (domain) |d| {
-            for (self.blocked_domains.items) |pattern| {
-                if (matchesDomain(pattern, d)) return .drop;
-            }
-            for (self.direct_domains.items) |pattern| {
-                if (matchesDomain(pattern, d)) {
-                    self.learner.learn(dst_ip) catch {};
-                    return .direct;
-                }
-            }
-            for (self.routed_domains.items) |pattern| {
-                if (matchesDomain(pattern, d)) return .mesh;
-            }
-            if (self.is_russian_client and self.rules_engine.matchDomain(d)) {
-                self.learner.learn(dst_ip) catch {};
+        for (self.direct_cidrs.items) |c| {
+            if (c.matches(dst_ip)) {
+                log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} action=direct reason=direct_cidr", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff });
                 return .direct;
             }
         }
 
-        if (self.learner.has(dst_ip)) return .direct;
+        if (domain) |d| {
+            for (self.blocked_domains.items) |pattern| {
+                if (matchesDomain(pattern, d)) {
+                    log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} domain={s} action=drop reason=blocked_domain", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff, d });
+                    return .drop;
+                }
+            }
+            for (self.direct_domains.items) |pattern| {
+                if (matchesDomain(pattern, d)) {
+                    self.learner.learn(dst_ip) catch {};
+                    log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} domain={s} action=direct reason=direct_domain", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff, d });
+                    return .direct;
+                }
+            }
+            for (self.routed_domains.items) |pattern| {
+                if (matchesDomain(pattern, d)) {
+                    log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} domain={s} action=mesh reason=routed_domain", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff, d });
+                    return .mesh;
+                }
+            }
+            if (self.is_russian_client and self.rules_engine.matchDomain(d)) {
+                self.learner.learn(dst_ip) catch {};
+                log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} domain={s} action=direct reason=russian_domain_rules", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff, d });
+                return .direct;
+            }
+        }
 
-        if (self.is_russian_client and self.rules_engine.matchIp(dst_ip)) {
+        if (self.learner.has(dst_ip)) {
+            log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} action=direct reason=learned_cache", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff });
             return .direct;
         }
 
-        if (self.mesh_subnet.matches(dst_ip)) return .mesh;
+        if (self.is_russian_client and self.rules_engine.matchIp(dst_ip)) {
+            log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} action=direct reason=russian_ip_rules", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff });
+            return .direct;
+        }
 
-        return if (self.default_mesh) .mesh else .direct;
+        if (self.mesh_subnet.matches(dst_ip)) {
+            log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} action=mesh reason=mesh_subnet_match", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff });
+            return .mesh;
+        }
+
+        const act: RouteAction = if (self.default_mesh) .mesh else .direct;
+        log.debugFmt("router", "decide", "dst={d}.{d}.{d}.{d} action={s} reason=default_policy", .{ (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff, @tagName(act) });
+        return act;
     }
 };

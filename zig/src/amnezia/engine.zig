@@ -5,24 +5,13 @@ const config_mod = @import("../config.zig");
 const crypto_mod = @import("crypto.zig");
 const protocol_mod = @import("protocol.zig");
 const peer_mod = @import("peer.zig");
+const tun_mod = @import("../vpn/tun.zig");
 const router_mod = @import("../routing/router.zig");
 const learner_mod = @import("../routing/learner.zig");
 const dns_mod = @import("../routing/dns.zig");
-const tun_mod = @import("../vpn/tun.zig");
+const log = @import("../log.zig");
 
-pub const SpinLock = struct {
-    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
-
-    pub fn lock(self: *SpinLock) void {
-        while (self.state.swap(true, .acquire)) {
-            std.atomic.spinLoopHint();
-        }
-    }
-
-    pub fn unlock(self: *SpinLock) void {
-        self.state.store(false, .release);
-    }
-};
+pub const SpinLock = log.SpinLock;
 
 pub const AmneziaEngine = struct {
     allocator: std.mem.Allocator,
@@ -46,7 +35,7 @@ pub const AmneziaEngine = struct {
     assigned_vpn_ip: u32 = 0x0a2a0002,
 
     pub fn init(allocator: std.mem.Allocator, config_path: ?[]const u8, initial_config: config_mod.FullConfig) !*AmneziaEngine {
-        const tun_dev = tun_mod.TunDevice.init(allocator, initial_config.node.vpn_iface) catch tun_mod.TunDevice.initWithFd(allocator, -1);
+        const tun_dev = try tun_mod.TunDevice.init(allocator, initial_config.node.vpn_iface);
         return createEngine(allocator, config_path, initial_config, tun_dev);
     }
 
@@ -120,10 +109,12 @@ pub const AmneziaEngine = struct {
         self.local_public_key = pubkey;
 
         try self.applyConfig();
+        log.infoFmt("engine", "engine_created", "Initialized AmneziaEngine mode={s} iface={s} ip={s}", .{ @tagName(initial_config.node.mode), initial_config.node.vpn_iface, initial_config.node.vpn_ip });
         return self;
     }
 
     pub fn deinit(self: *AmneziaEngine) void {
+        log.info("engine", "engine_deinit", "Deinitializing AmneziaEngine");
         self.stop();
         self.clearPeers();
         self.peers.deinit(self.allocator);
@@ -183,6 +174,7 @@ pub const AmneziaEngine = struct {
                 self.dns_srv.addHost(h.name, hip) catch {};
             }
         }
+        log.infoFmt("engine", "config_applied", "Applied Amnezia parameters jc={d} jmin={d} jmax={d} s1={d} s2={d}", .{ self.amnezia_params.jc, self.amnezia_params.jmin, self.amnezia_params.jmax, self.amnezia_params.s1, self.amnezia_params.s2 });
     }
 
     pub fn start(self: *AmneziaEngine) !void {
@@ -191,7 +183,10 @@ pub const AmneziaEngine = struct {
         const port = if (self.config.node.mode == .server) self.config.node.listen_port else 0;
         const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
         const sock: i32 = @intCast(sock_rc);
-        if (sock < 0) return error.SocketFailed;
+        if (sock < 0) {
+            log.err("engine", "socket_create_failed", "Failed to create main UDP socket");
+            return error.SocketFailed;
+        }
 
         var sa: linux.sockaddr.in = undefined;
         sa.family = linux.AF.INET;
@@ -206,16 +201,20 @@ pub const AmneziaEngine = struct {
             sa.port = 0;
             if (linux.bind(sock, @ptrCast(&sa), @sizeOf(linux.sockaddr.in)) != 0) {
                 _ = linux.close(sock);
+                log.errFmt("engine", "bind_failed", "Failed to bind main UDP socket on port={d}", .{port});
                 return error.BindFailed;
             }
         }
 
         self.udp_socket = sock;
         self.running.store(true, .seq_cst);
+        log.infoFmt("engine", "udp_bound", "Bound main UDP socket fd={d} port={d}", .{ sock, port });
 
         if (self.config.node.mode == .server) {
             sys.setupServerNetworking(self.config.node.vpn_iface, self.config.node.vpn_ip, self.config.node.vpn_subnet, self.config.node.mtu);
-            self.dns_srv.start() catch {};
+            self.dns_srv.start() catch |err| {
+                log.errFmt("engine", "dns_start_failed", "Failed to start DNS server: {any}", .{err});
+            };
         }
 
         self.threads[0] = try std.Thread.spawn(.{}, udpLoop, .{self});
@@ -225,11 +224,13 @@ pub const AmneziaEngine = struct {
         if (self.config.node.mode == .client or self.config.node.mode == .admin) {
             self.threads[3] = try std.Thread.spawn(.{}, clientInitLoop, .{self});
         }
+        log.info("engine", "threads_started", "Spawned UDP listener, TUN loop, and maintenance background threads");
     }
 
     pub fn stop(self: *AmneziaEngine) void {
         if (!self.running.load(.seq_cst)) return;
         self.running.store(false, .seq_cst);
+        log.info("engine", "stopping", "Stopping AmneziaEngine worker threads and network interfaces");
 
         if (self.config.node.mode == .client) {
             const s_ep = if (self.config.node.servers.len > 0) self.config.node.servers[self.active_server_idx % self.config.node.servers.len] else null;
@@ -250,9 +251,11 @@ pub const AmneziaEngine = struct {
                 opt_t.* = null;
             }
         }
+        log.info("engine", "stopped", "AmneziaEngine stopped cleanly");
     }
 
     fn clientInitLoop(self: *AmneziaEngine) void {
+        log.info("engine", "client_init_start", "Starting client initialization routine");
         self.connectToNextServer();
 
         if (self.config.node.mode == .client and self.config.node.smart_routing) {
@@ -280,6 +283,7 @@ pub const AmneziaEngine = struct {
                 @as([4]u8, @bitCast(std.mem.nativeToBig(u32, hip))),
                 port,
             );
+            log.infoFmt("engine", "server_target", "Selected server target endpoint: {s} (ip={d}.{d}.{d}.{d}:{d})", .{ s_str, (hip >> 24) & 0xff, (hip >> 16) & 0xff, (hip >> 8) & 0xff, hip & 0xff, port });
         }
     }
 
@@ -299,6 +303,7 @@ pub const AmneziaEngine = struct {
 
         var dest_sa = dest.toLinuxSockaddr();
         var attempts: usize = 0;
+        log.info("engine", "stun_check_start", "Initiating local STUN probe to check client geographic location");
         while (attempts < 3 and self.running.load(.seq_cst)) : (attempts += 1) {
             _ = linux.sendto(
                 stun_sock,
@@ -324,6 +329,7 @@ pub const AmneziaEngine = struct {
             if (protocol_mod.parseStunResponse(resp_buf[0..n], tx_id)) |stun_res| {
                 const is_ru = self.router.rules_engine.matchIp(stun_res.ip);
                 self.router.is_russian_client = is_ru;
+                log.infoFmt("engine", "stun_resolved", "STUN probe resolved external client IP={d}.{d}.{d}.{d}, russian_client={any}", .{ (stun_res.ip >> 24) & 0xff, (stun_res.ip >> 16) & 0xff, (stun_res.ip >> 8) & 0xff, stun_res.ip & 0xff, is_ru });
                 break;
             }
         }
@@ -369,6 +375,7 @@ pub const AmneziaEngine = struct {
             @ptrCast(&dest_sa),
             @sizeOf(linux.sockaddr.in),
         );
+        log.infoFmt("engine", "handshake_init_sent", "Sent handshake initiation packet (len={d}) to server", .{total_len});
     }
 
     fn udpLoop(self: *AmneziaEngine) void {
@@ -431,8 +438,11 @@ pub const AmneziaEngine = struct {
                     @ptrCast(&src_sa),
                     @sizeOf(linux.sockaddr.in),
                 );
+                log.debugFmt("engine", "stun_answered", "Responded to STUN request from {d}.{d}.{d}.{d}:{d}", .{ (client_ip >> 24) & 0xff, (client_ip >> 16) & 0xff, (client_ip >> 8) & 0xff, client_ip & 0xff, client_port });
             },
-            .stun_resp => {},
+            .stun_resp => {
+                log.debug("engine", "stun_resp_ignored", "Ignored inbound STUN response on primary UDP socket");
+            },
             .handshake_init => {
                 if (self.config.node.mode != .server) return;
                 if (packet.len < 148) return;
@@ -446,7 +456,10 @@ pub const AmneziaEngine = struct {
                 const effective_token = if (self.config.node.client_token.len > 0) self.config.node.client_token else self.config.amnezia.psk;
                 crypto_mod.computeMac(&expected_mac, &client_pub, effective_token);
 
-                if (!std.mem.eql(u8, mac1, &expected_mac)) return;
+                if (!std.mem.eql(u8, mac1, &expected_mac)) {
+                    log.warnFmt("engine", "auth_failed", "Handshake initiation authentication token mismatch from sender_idx={d}", .{sender_idx});
+                    return;
+                }
 
                 const client_vpn_ip = self.next_client_ip.fetchAdd(1, .monotonic);
 
@@ -510,6 +523,7 @@ pub const AmneziaEngine = struct {
                     @ptrCast(&src_sa),
                     @sizeOf(linux.sockaddr.in),
                 );
+                log.infoFmt("engine", "handshake_accepted", "Accepted handshake from sender_idx={d}, assigned IP={d}.{d}.{d}.{d}", .{ sender_idx, (client_vpn_ip >> 24) & 0xff, (client_vpn_ip >> 16) & 0xff, (client_vpn_ip >> 8) & 0xff, client_vpn_ip & 0xff });
             },
             .handshake_resp => {
                 if (packet.len < 92) return;
@@ -532,6 +546,7 @@ pub const AmneziaEngine = struct {
                     } else |_| {}
                 }
                 self.mutex.unlock();
+                log.info("engine", "handshake_complete", "Received handshake response, server session established");
             },
             .transport_data => {
                 if (packet.len < 32) return;
@@ -559,7 +574,10 @@ pub const AmneziaEngine = struct {
                 var decrypted_buf: [2048]u8 = undefined;
                 if (ciphertext.len > decrypted_buf.len) return;
 
-                crypto_mod.decryptPayload(decrypted_buf[0..ciphertext.len], ciphertext, tag, nonce, psk_key) catch return;
+                crypto_mod.decryptPayload(decrypted_buf[0..ciphertext.len], ciphertext, tag, nonce, psk_key) catch {
+                    log.warnFmt("engine", "packet_decrypt_failed", "Failed to decrypt transport packet counter={d}", .{counter});
+                    return;
+                };
 
                 _ = self.tun.writePacket(decrypted_buf[0..ciphertext.len]) catch {};
 
@@ -568,25 +586,33 @@ pub const AmneziaEngine = struct {
                     self.peers.items[0].recordRx(packet.len);
                 }
                 self.mutex.unlock();
+                log.debugFmt("engine", "packet_rx", "Decrypted and wrote packet counter={d} len={d} to TUN", .{ counter, ciphertext.len });
             },
             .push_signal => {
                 if (packet.len < 16) return;
                 const subtype = std.mem.readInt(u32, packet[4..8][0..4], .little);
+                log.infoFmt("engine", "push_signal", "Received push signal subtype={d}", .{subtype});
 
                 if (subtype == 1 and self.config.node.mode == .server) {
                     if (packet.len < 36) return;
                     const auth_mac = packet[16..32];
                     var expected_mac: [16]u8 = undefined;
                     crypto_mod.computeMac(&expected_mac, packet[36..], self.config.node.admin_token);
-                    if (!std.mem.eql(u8, auth_mac, &expected_mac)) return;
+                    if (!std.mem.eql(u8, auth_mac, &expected_mac)) {
+                        log.warn("engine", "push_auth_failed", "Push signal authorization MAC check failed");
+                        return;
+                    }
 
                     self.broadcastPushReload();
                 } else if (subtype == 2 and (self.config.node.mode == .client or self.config.node.mode == .admin)) {
                     self.learner.sweep();
                     self.applyConfig() catch {};
+                    log.info("engine", "config_reloaded", "Client updated rules and swept learner cache on push signal");
                 }
             },
-            .mesh_sync, .cookie, .unknown => {},
+            .mesh_sync, .cookie, .unknown => {
+                log.debugFmt("engine", "packet_ignored", "Ignored packet type {s}", .{@tagName(ptype)});
+            },
         }
     }
 
@@ -610,6 +636,7 @@ pub const AmneziaEngine = struct {
                 );
             }
         }
+        log.infoFmt("engine", "broadcast_sent", "Broadcasted push reload to {d} active peers", .{self.peers.items.len});
     }
 
     fn tunLoop(self: *AmneziaEngine) void {
@@ -699,6 +726,7 @@ pub const AmneziaEngine = struct {
         );
 
         peer.recordTx(total_len);
+        log.debugFmt("engine", "packet_tx", "Encrypted and sent packet counter={d} len={d} to peer dst_ip={d}.{d}.{d}.{d}", .{ counter, total_len, (dst_ip >> 24) & 0xff, (dst_ip >> 16) & 0xff, (dst_ip >> 8) & 0xff, dst_ip & 0xff });
     }
 
     fn maintenanceLoop(self: *AmneziaEngine) void {
@@ -714,6 +742,7 @@ pub const AmneziaEngine = struct {
 
             if (tick % 60 == 0) {
                 self.learner.sweep();
+                log.debug("engine", "maintenance_sweep", "Periodic learner sweep completed");
             }
 
             if (tick % 25 == 0) {
@@ -739,6 +768,7 @@ pub const AmneziaEngine = struct {
                                 @ptrCast(&ep_sa),
                                 @sizeOf(linux.sockaddr.in),
                             );
+                            log.debugFmt("engine", "keepalive_sent", "Sent keepalive to peer receiver_idx={d}", .{p.receiver_index});
                         }
                     }
                 }

@@ -1,3 +1,4 @@
+const log = @import("log.zig");
 const sys = @import("sys.zig");
 const std = @import("std");
 const linux = std.os.linux;
@@ -198,7 +199,10 @@ pub const FullConfig = struct {
 
         const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
         const fd_rc = linux.open(path_z, flags, 0o644);
-        if (sys.isError(fd_rc)) return error.CannotCreateFile;
+        if (sys.isError(fd_rc)) {
+            log.errFmt("config", "save_failed", "Failed to create config file {s}", .{path});
+            return error.CannotCreateFile;
+        }
         const fd: i32 = @intCast(fd_rc);
         defer _ = linux.close(fd);
 
@@ -206,6 +210,7 @@ pub const FullConfig = struct {
         defer buf.deinit(std.heap.page_allocator);
         try self.serialize(buf.writer(std.heap.page_allocator));
         _ = linux.write(fd, buf.items.ptr, buf.items.len);
+        log.infoFmt("config", "saved", "Saved configuration to {s} ({d} bytes)", .{ path, buf.items.len });
     }
 };
 
@@ -421,6 +426,8 @@ pub fn parseYaml(allocator: std.mem.Allocator, input: []const u8) !FullConfig {
     cfg.dns.upstreams = try upstreams.toOwnedSlice(a);
     cfg.dns.hosts = try hosts_list.toOwnedSlice(a);
 
+    log.infoFmt("config", "parsed", "Parsed configuration: mode={s} listen_port={d} vpn_ip={s} servers={d} hosts={d}", .{ @tagName(cfg.node.mode), cfg.node.listen_port, cfg.node.vpn_ip, cfg.node.servers.len, cfg.dns.hosts.len });
+
     return cfg;
 }
 
@@ -432,7 +439,10 @@ pub fn loadFromFile(allocator: std.mem.Allocator, path: []const u8) !FullConfig 
     const path_z: [*:0]const u8 = @ptrCast(&path_buf);
 
     const fd_rc = linux.open(path_z, .{}, 0);
-    if (sys.isError(fd_rc)) return error.FileNotFound;
+    if (sys.isError(fd_rc)) {
+        log.errFmt("config", "file_not_found", "Failed to open config file {s}", .{path});
+        return error.FileNotFound;
+    }
     const fd: i32 = @intCast(fd_rc);
     defer _ = linux.close(fd);
 
@@ -440,6 +450,10 @@ pub fn loadFromFile(allocator: std.mem.Allocator, path: []const u8) !FullConfig 
     defer allocator.free(buf);
 
     const n_rc = linux.read(fd, buf.ptr, buf.len);
-    if (sys.isError(n_rc)) return error.ReadFailed;
+    if (sys.isError(n_rc)) {
+        log.errFmt("config", "read_failed", "Failed to read config file {s}", .{path});
+        return error.ReadFailed;
+    }
+    log.infoFmt("config", "read_file", "Read {d} bytes from {s}", .{ n_rc, path });
     return parseYaml(allocator, buf[0..@intCast(n_rc)]);
 }

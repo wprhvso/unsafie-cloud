@@ -1,19 +1,8 @@
 const std = @import("std");
 const sys = @import("../sys.zig");
+const log = @import("../log.zig");
 
-pub const SpinLock = struct {
-    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
-
-    pub fn lock(self: *SpinLock) void {
-        while (self.state.swap(true, .acquire)) {
-            std.atomic.spinLoopHint();
-        }
-    }
-
-    pub fn unlock(self: *SpinLock) void {
-        self.state.store(false, .release);
-    }
-};
+pub const SpinLock = log.SpinLock;
 
 pub const LearnerSet = struct {
     allocator: std.mem.Allocator,
@@ -38,6 +27,7 @@ pub const LearnerSet = struct {
         defer self.mutex.unlock();
         const expires = sys.timestamp() + self.ttl_seconds;
         try self.seen.put(ip, expires);
+        log.debugFmt("learner", "learned_ip", "Learned IP {d}.{d}.{d}.{d} TTL={d}s", .{ (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, self.ttl_seconds });
     }
 
     pub fn has(self: *LearnerSet, ip: u32) bool {
@@ -62,6 +52,9 @@ pub const LearnerSet = struct {
         }
         for (to_remove.items) |ip| {
             _ = self.seen.remove(ip);
+        }
+        if (to_remove.items.len > 0) {
+            log.infoFmt("learner", "swept_expired_ips", "Swept {d} expired learned IPs, remaining={d}", .{ to_remove.items.len, self.seen.count() });
         }
     }
 };

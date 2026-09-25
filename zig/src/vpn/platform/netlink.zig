@@ -1,3 +1,4 @@
+const log = @import("../../log.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 const linux = std.os.linux;
@@ -343,7 +344,7 @@ pub const Netlink = struct {
         const up = cached_uplink orelse return;
         if (up.ifindex <= 0) return;
         addRoute(up.ifindex, ip, 32, up.gateway) catch {};
-        std.debug.print("[BYPASS ROUTE] {d}.{d}.{d}.{d}/32 via {s} dev {s}\n", .{
+        log.infoFmt("netlink", "route_bypass", "Bypass route: {d}.{d}.{d}.{d}/32 via {s} dev {s}", .{
             (ip >> 24) & 0xff,
             (ip >> 16) & 0xff,
             (ip >> 8) & 0xff,
@@ -367,7 +368,7 @@ pub const Netlink = struct {
     pub fn setupClientRoutes(vpn_ifname: []const u8, server_ip: ?u32) void {
         cached_uplink = detectUplink();
         if (cached_uplink) |up| {
-            std.debug.print("[ROUTE INIT] Physical uplink detected: iface={s} (index={d}) gateway={d}.{d}.{d}.{d}\n", .{
+            log.infoFmt("netlink", "uplink_detected", "Physical uplink detected: iface={s} (index={d}) gateway={d}.{d}.{d}.{d}", .{
                 up.iface[0..up.iface_len],
                 up.ifindex,
                 (up.gateway >> 24) & 0xff,
@@ -379,7 +380,7 @@ pub const Netlink = struct {
             if (server_ip) |sip| {
                 if (up.ifindex > 0) {
                     addRoute(up.ifindex, sip, 32, up.gateway) catch {};
-                    std.debug.print("[ROUTE INIT] Added direct host route to VPS {d}.{d}.{d}.{d} via physical uplink\n", .{
+                    log.infoFmt("netlink", "route_host_added", "Added direct host route to VPS {d}.{d}.{d}.{d} via physical uplink", .{
                         (sip >> 24) & 0xff,
                         (sip >> 16) & 0xff,
                         (sip >> 8) & 0xff,
@@ -388,7 +389,7 @@ pub const Netlink = struct {
                 }
             }
         } else {
-            std.debug.print("[ROUTE WARN] Could not detect physical default gateway from /proc/net/route\n", .{});
+            log.warn("netlink", "uplink_not_detected", "Could not detect physical default gateway from /proc/net/route");
         }
 
         var vpn_idx: i32 = -1;
@@ -402,21 +403,21 @@ pub const Netlink = struct {
         }
 
         if (vpn_idx <= 0) {
-            std.debug.print("[ROUTE ERROR] VPN interface {s} not found after timeout! Tunnel routes not active!\n", .{vpn_ifname});
+            log.errFmt("netlink", "vpn_dev_timeout", "VPN interface {s} not found after timeout! Tunnel routes not active!", .{vpn_ifname});
             return;
         }
 
-        std.debug.print("[ROUTE INIT] Found VPN device {s} with index {d}\n", .{ vpn_ifname, vpn_idx });
+        log.infoFmt("netlink", "vpn_dev_found", "Found VPN device {s} with index {d}", .{ vpn_ifname, vpn_idx });
 
         addRoute(vpn_idx, 0x00000000, 1, null) catch |err| {
-            std.debug.print("[ROUTE ERROR] addRoute 0.0.0.0/1 failed: {any}\n", .{err});
+            log.errFmt("netlink", "route_add_failed", "addRoute 0.0.0.0/1 failed: {any}", .{err});
         };
         addRoute(vpn_idx, 0x80000000, 1, null) catch |err| {
-            std.debug.print("[ROUTE ERROR] addRoute 128.0.0.0/1 failed: {any}\n", .{err});
+            log.errFmt("netlink", "route_add_failed", "addRoute 128.0.0.0/1 failed: {any}", .{err});
         };
 
-        std.debug.print("[ROUTE INIT] Active: 0.0.0.0/1 -> {s} (all non-domestic traffic captured)\n", .{vpn_ifname});
-        std.debug.print("[ROUTE INIT] Active: 128.0.0.0/1 -> {s} (all non-domestic traffic captured)\n", .{vpn_ifname});
+        log.infoFmt("netlink", "route_active", "Active: 0.0.0.0/1 -> {s} (all non-domestic traffic captured)", .{vpn_ifname});
+        log.infoFmt("netlink", "route_active", "Active: 128.0.0.0/1 -> {s} (all non-domestic traffic captured)", .{vpn_ifname});
 
         setupDnsOverride();
     }
@@ -426,14 +427,14 @@ pub const Netlink = struct {
         if (vpn_idx) |idx| {
             delRoute(idx, 0x00000000, 1) catch {};
             delRoute(idx, 0x80000000, 1) catch {};
-            std.debug.print("[ROUTE CLEANUP] Removed 0.0.0.0/1 and 128.0.0.0/1 routes from {s}\n", .{vpn_ifname});
+            log.infoFmt("netlink", "route_cleanup", "Removed 0.0.0.0/1 and 128.0.0.0/1 routes from {s}", .{vpn_ifname});
         }
 
         if (cached_uplink) |up| {
             if (server_ip) |sip| {
                 if (up.ifindex > 0) {
                     delRoute(up.ifindex, sip, 32) catch {};
-                    std.debug.print("[ROUTE CLEANUP] Removed VPS host pin route\n", .{});
+                    log.info("netlink", "route_pin_removed", "Removed VPS host pin route");
                 }
             }
         }
@@ -470,9 +471,9 @@ pub const Netlink = struct {
             const content = "nameserver 127.0.0.1\noptions timeout:1\n";
             _ = linux.write(f_fd, content.ptr, content.len);
             _ = linux.close(f_fd);
-            std.debug.print("[DNS INIT] Configured local DNS resolver: nameserver 127.0.0.1 (/etc/resolv.conf)\n", .{});
+            log.info("netlink", "dns_override_applied", "Configured local DNS resolver: nameserver 127.0.0.1 (/etc/resolv.conf)");
         } else {
-            std.debug.print("[DNS WARN] Could not overwrite /etc/resolv.conf directly\n", .{});
+            log.warn("netlink", "dns_override_failed", "Could not overwrite /etc/resolv.conf directly");
         }
     }
 
@@ -494,7 +495,7 @@ pub const Netlink = struct {
                     const f_fd: i32 = @intCast(f_rc);
                     _ = linux.write(f_fd, buf[0..len].ptr, len);
                     _ = linux.close(f_fd);
-                    std.debug.print("[DNS CLEANUP] Restored original /etc/resolv.conf\n", .{});
+                    log.info("netlink", "dns_override_restored", "Restored original /etc/resolv.conf");
                 }
             }
             _ = linux.unlink("/etc/resolv.conf.unsafie.bak");

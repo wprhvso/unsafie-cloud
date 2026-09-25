@@ -3,6 +3,7 @@ const linux = std.os.linux;
 const learner_mod = @import("learner.zig");
 const router_mod = @import("router.zig");
 const protocol_mod = @import("../amnezia/protocol.zig");
+const log = @import("../log.zig");
 
 pub const DnsServer = struct {
     allocator: std.mem.Allocator,
@@ -42,6 +43,7 @@ pub const DnsServer = struct {
 
     pub fn addHost(self: *DnsServer, host: []const u8, ip: u32) !void {
         try self.static_hosts.put(host, ip);
+        log.debugFmt("dns", "host_added", "Added static host {s} -> {d}.{d}.{d}.{d}", .{ host, (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff });
     }
 
     pub fn start(self: *DnsServer) !void {
@@ -55,7 +57,10 @@ pub const DnsServer = struct {
         const ip = router_mod.parseIpv4(host_part) orelse 0;
         const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
         const sock: i32 = @intCast(sock_rc);
-        if (sock < 0) return error.SocketFailed;
+        if (sock < 0) {
+            log.errFmt("dns", "socket_failed", "Failed to create DNS UDP socket on {s}", .{self.listen_addr_str});
+            return error.SocketFailed;
+        }
 
         var sa: linux.sockaddr.in = undefined;
         sa.family = linux.AF.INET;
@@ -67,6 +72,7 @@ pub const DnsServer = struct {
             sa.port = 0;
             if (linux.bind(sock, @ptrCast(&sa), @sizeOf(linux.sockaddr.in)) != 0) {
                 _ = linux.close(sock);
+                log.errFmt("dns", "bind_failed", "Failed to bind DNS UDP socket on {s}", .{self.listen_addr_str});
                 return error.BindFailed;
             }
         }
@@ -74,6 +80,7 @@ pub const DnsServer = struct {
         self.sock_fd = sock;
         self.running.store(true, .seq_cst);
         self.thread = try std.Thread.spawn(.{}, workerLoop, .{self});
+        log.infoFmt("dns", "server_started", "DNS server listening on {s} (fd={d})", .{ self.listen_addr_str, sock });
     }
 
     pub fn stop(self: *DnsServer) void {
@@ -87,6 +94,7 @@ pub const DnsServer = struct {
             _ = linux.close(self.sock_fd);
             self.sock_fd = -1;
         }
+        log.info("dns", "server_stopped", "DNS server stopped cleanly");
     }
 
     fn workerLoop(self: *DnsServer) void {
@@ -121,6 +129,7 @@ pub const DnsServer = struct {
 
             const parsed = parseDomainName(buf[0..n], 12, &domain_buf);
             if (parsed) |info| {
+                log.debugFmt("dns", "query_received", "DNS query received for {s} len={d}", .{ info.domain, n });
                 if (self.static_hosts.get(info.domain)) |static_ip| {
                     if (buildAAnswer(buf[0..n], static_ip, &ans_buf)) |ans_len| {
                         _ = linux.sendto(
@@ -131,6 +140,7 @@ pub const DnsServer = struct {
                             @ptrCast(&src_addr),
                             addr_len,
                         );
+                        log.debugFmt("dns", "static_resolved", "Resolved static host {s} -> {d}.{d}.{d}.{d}", .{ info.domain, (static_ip >> 24) & 0xff, (static_ip >> 16) & 0xff, (static_ip >> 8) & 0xff, static_ip & 0xff });
                         continue;
                     }
                 }
@@ -145,10 +155,12 @@ pub const DnsServer = struct {
                             @ptrCast(&src_addr),
                             addr_len,
                         );
+                        log.debugFmt("dns", "internal_resolved", "Resolved internal domain {s} -> 10.42.0.1", .{info.domain});
                         continue;
                     }
                 }
 
+                var blocked = false;
                 for (self.router.blocked_domains.items) |pat| {
                     if (router_mod.SmartRouter.matchesDomain(pat, info.domain)) {
                         if (buildAAnswer(buf[0..n], 0, &ans_buf)) |ans_len| {
@@ -160,10 +172,13 @@ pub const DnsServer = struct {
                                 @ptrCast(&src_addr),
                                 addr_len,
                             );
+                            log.debugFmt("dns", "domain_blocked", "Blocked domain {s} matching {s}", .{ info.domain, pat });
                         }
+                        blocked = true;
                         break;
                     }
                 }
+                if (blocked) continue;
 
                 self.forwardUpstream(buf[0..n], info.domain, &src_addr, addr_len);
             }
@@ -199,6 +214,8 @@ pub const DnsServer = struct {
         up_sa.port = std.mem.nativeToBig(u16, target_port);
         up_sa.addr = @bitCast(std.mem.nativeToBig(u32, target_ip));
 
+        log.debugFmt("dns", "upstream_forward", "Forwarding DNS query for {s} to {d}.{d}.{d}.{d}:{d}", .{ domain, (target_ip >> 24) & 0xff, (target_ip >> 16) & 0xff, (target_ip >> 8) & 0xff, target_ip & 0xff, target_port });
+
         _ = linux.sendto(
             upstream_sock,
             query.ptr,
@@ -213,7 +230,10 @@ pub const DnsServer = struct {
             .events = linux.POLL.IN,
             .revents = 0,
         }};
-        if (linux.poll(&pfd, 1, 1500) <= 0) return;
+        if (linux.poll(&pfd, 1, 1500) <= 0) {
+            log.warnFmt("dns", "upstream_timeout", "Upstream DNS query timeout for {s}", .{domain});
+            return;
+        }
 
         var resp_buf: [2048]u8 = undefined;
         const resp_rc = linux.read(upstream_sock, resp_buf[0..].ptr, resp_buf.len);
@@ -230,6 +250,7 @@ pub const DnsServer = struct {
             @ptrCast(client_addr),
             client_len,
         );
+        log.debugFmt("dns", "upstream_responded", "Delivered upstream DNS response for {s} (len={d})", .{ domain, resp_len });
     }
 
     fn extractLearnedIps(self: *DnsServer, resp: []const u8, domain: []const u8) void {
@@ -273,6 +294,7 @@ pub const DnsServer = struct {
             if (rtype == 1 and rdlen == 4 and offset + 4 <= resp.len) {
                 const ip = std.mem.readInt(u32, resp[offset .. offset + 4][0..4], .big);
                 self.learner.learn(ip) catch {};
+                log.infoFmt("dns", "learned_ip_extracted", "Extracted learned IP {d}.{d}.{d}.{d} for {s}", .{ (ip >> 24) & 0xff, (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff, domain });
             }
             offset += rdlen;
         }
