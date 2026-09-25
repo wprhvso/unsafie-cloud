@@ -3,14 +3,14 @@ set dotenv-load := true
 fix:
     cd zig && zig fmt src/
 
-run:
-    cd zig && zig build run
+build:
+    cd zig && zig build
+
+run *args: build
+    ./zig/zig-out/bin/unsafie {{args}}
 
 gen-rules:
     cd zig && zig build gen-rules
-
-build-static:
-    cd zig && zig build -Doptimize=ReleaseFast
 
 ci-check:
     cd zig && zig fmt --check src/
@@ -19,7 +19,7 @@ ci-test:
     cd zig && zig build test
 
 ci-build:
-    cd zig && zig build -Doptimize=ReleaseFast
+    cd zig && zig build
 
 ci-zig-format:
     cd zig && zig fmt --check src/
@@ -60,7 +60,13 @@ cd-all:
 
     zip -j dist/unsafie-android.apk android/app/src/main/jniLibs/arm64-v8a/libunsafie_core.so android/app/src/main/AndroidManifest.xml
 
-    VERSION=$(awk -F '[Count"= ]+' '/^\.version[ ]*=/ {gsub(/[\047",]/, "", $2); print $2}' zig/build.zig.zon)
+    VERSION=""
+    while IFS= read -r line; do
+        if [[ $line =~ \.version[[:space:]]*=[[:space:]]*\"([^\"]+)\" ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            break
+        fi
+    done < zig/build.zig.zon
     if [ -z "$VERSION" ]; then
         echo "Error: VERSION could not be extracted from zig/build.zig.zon" >&2
         exit 1

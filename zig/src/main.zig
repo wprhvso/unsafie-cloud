@@ -53,6 +53,18 @@ pub fn main() !void {
             return;
         }
         config_path = arg;
+    } else {
+        const check_fd = linux.open("unsafie.yaml", .{}, 0);
+        if (linux.E.init(check_fd) == .SUCCESS) {
+            _ = linux.close(@intCast(check_fd));
+            config_path = "unsafie.yaml";
+        } else {
+            const check_parent = linux.open("../unsafie.yaml", .{}, 0);
+            if (linux.E.init(check_parent) == .SUCCESS) {
+                _ = linux.close(@intCast(check_parent));
+                config_path = "../unsafie.yaml";
+            }
+        }
     }
 
     setupSignals();

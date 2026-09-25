@@ -9,8 +9,8 @@ pub const Ipv4Range = struct {
 fn getCliArg(allocator: std.mem.Allocator) ?[]const u8 {
     const flags = linux.O{ .ACCMODE = .RDONLY };
     const fd_rc = linux.open("/proc/self/cmdline", flags, 0);
+    if (linux.E.init(fd_rc) != .SUCCESS) return null;
     const fd: i32 = @intCast(fd_rc);
-    if (fd < 0) return null;
     defer _ = linux.close(fd);
 
     var buf: [4096]u8 = undefined;
@@ -166,8 +166,8 @@ pub fn main() !void {
 
     const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
     const fd_rc = linux.open(path_z, flags, 0o644);
-    const fd: i32 = @intCast(fd_rc);
-    if (fd >= 0) {
+    if (linux.E.init(fd_rc) == .SUCCESS) {
+        const fd: i32 = @intCast(fd_rc);
         defer _ = linux.close(fd);
         _ = linux.write(fd, bin_data.ptr, bin_data.len);
     }

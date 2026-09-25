@@ -197,8 +197,8 @@ pub const FullConfig = struct {
 
         const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
         const fd_rc = linux.open(path_z, flags, 0o644);
+        if (linux.E.init(fd_rc) != .SUCCESS) return error.CannotCreateFile;
         const fd: i32 = @intCast(fd_rc);
-        if (fd < 0) return error.CannotCreateFile;
         defer _ = linux.close(fd);
 
         var buf: std.ArrayList(u8) = .empty;
@@ -431,14 +431,14 @@ pub fn loadFromFile(allocator: std.mem.Allocator, path: []const u8) !FullConfig 
     const path_z: [*:0]const u8 = @ptrCast(&path_buf);
 
     const fd_rc = linux.open(path_z, .{}, 0);
+    if (linux.E.init(fd_rc) != .SUCCESS) return error.FileNotFound;
     const fd: i32 = @intCast(fd_rc);
-    if (fd < 0) return error.FileNotFound;
     defer _ = linux.close(fd);
 
     var buf = try allocator.alloc(u8, 65536);
     defer allocator.free(buf);
 
-    const n = linux.read(fd, buf.ptr, buf.len);
-    if (n < 0) return error.ReadFailed;
-    return parseYaml(allocator, buf[0..@intCast(n)]);
+    const n_rc = linux.read(fd, buf.ptr, buf.len);
+    if (linux.E.init(n_rc) != .SUCCESS) return error.ReadFailed;
+    return parseYaml(allocator, buf[0..@intCast(n_rc)]);
 }

@@ -14,4 +14,4 @@ jobs:
         with:
           version: 0.15.1
       - uses: extractions/setup-just@v2
-      - run: just build-static
+      - run: just build

@@ -17,8 +17,8 @@ High-performance, pure in-memory Mesh VPN and Sovereign Private Cloud Kernel pow
 
 ### Build Standalone Binary
 
-cd zig && zig build -Doptimize=ReleaseFast
+just build
 
 ### Run Node
 
-./zig/zig-out/bin/unsafie
+just run

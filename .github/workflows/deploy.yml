@@ -16,4 +16,4 @@ jobs:
           version: 0.15.1
       - name: build check
         run: |
-          cd zig && zig build -Doptimize=ReleaseFast
+          cd zig && zig build

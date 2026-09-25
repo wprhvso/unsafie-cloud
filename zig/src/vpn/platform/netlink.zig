@@ -168,7 +168,53 @@ pub const Netlink = struct {
         _ = std.posix.system.ioctl(sock, 0x8916, @intFromPtr(&ifr));
 
         ifr.addr.ip = @byteSwap(netmask);
-        _ = std.posix.system.ioctl(sock, 0x8918, @intFromPtr(&ifr));
+        _ = std.posix.system.ioctl(sock, 0x891c, @intFromPtr(&ifr));
+    }
+
+    pub fn setMtu(ifname: []const u8, mtu: u32) !void {
+        if (builtin.os.tag != .linux) return;
+        if (mtu == 0) return;
+
+        const sock = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0);
+        defer std.posix.close(sock);
+
+        var ifr: extern struct {
+            name: [16]u8 = std.mem.zeroes([16]u8),
+            data: extern union {
+                flags: c_short,
+                mtu: c_int,
+                padding: [24]u8,
+            } = .{ .flags = 0 },
+        } = .{};
+
+        const copy_len = @min(ifname.len, 15);
+        @memcpy(ifr.name[0..copy_len], ifname[0..copy_len]);
+        ifr.data.mtu = @intCast(mtu);
+
+        _ = std.posix.system.ioctl(sock, 0x8922, @intFromPtr(&ifr));
+    }
+
+    pub fn setLinkDown(ifname: []const u8) void {
+        if (builtin.os.tag != .linux) return;
+
+        const sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch return;
+        defer std.posix.close(sock);
+
+        var ifr: extern struct {
+            name: [16]u8 = std.mem.zeroes([16]u8),
+            data: extern union {
+                flags: c_short,
+                mtu: c_int,
+                padding: [24]u8,
+            } = .{ .flags = 0 },
+        } = .{};
+
+        const copy_len = @min(ifname.len, 15);
+        @memcpy(ifr.name[0..copy_len], ifname[0..copy_len]);
+
+        _ = std.posix.system.ioctl(sock, 0x8913, @intFromPtr(&ifr));
+        ifr.data.flags &= ~@as(c_short, 0x0001);
+        _ = std.posix.system.ioctl(sock, 0x8914, @intFromPtr(&ifr));
     }
 
     pub fn addRoute(ifindex: i32, dst_ip: u32, prefix_len: u8, gateway: ?u32) !void {
