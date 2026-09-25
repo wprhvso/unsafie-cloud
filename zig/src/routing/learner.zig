@@ -1,8 +1,22 @@
 const std = @import("std");
 
+pub const SpinLock = struct {
+    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+    pub fn lock(self: *SpinLock) void {
+        while (self.state.swap(true, .acquire)) {
+            std.atomic.spinLoopHint();
+        }
+    }
+
+    pub fn unlock(self: *SpinLock) void {
+        self.state.store(false, .release);
+    }
+};
+
 pub const LearnerSet = struct {
     allocator: std.mem.Allocator,
-    mutex: std.Thread.Mutex = .{},
+    mutex: SpinLock = .{},
     seen: std.AutoHashMap(u32, i64),
     ttl_seconds: i64 = 1800,
 

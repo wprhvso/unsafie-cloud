@@ -8,6 +8,20 @@ const learner_mod = @import("../routing/learner.zig");
 const dns_mod = @import("../routing/dns.zig");
 const tun_mod = @import("../vpn/tun.zig");
 
+pub const SpinLock = struct {
+    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+    pub fn lock(self: *SpinLock) void {
+        while (self.state.swap(true, .acquire)) {
+            std.atomic.spinLoopHint();
+        }
+    }
+
+    pub fn unlock(self: *SpinLock) void {
+        self.state.store(false, .release);
+    }
+};
+
 pub const AmneziaEngine = struct {
     allocator: std.mem.Allocator,
     config_path: ?[]const u8,
@@ -23,7 +37,7 @@ pub const AmneziaEngine = struct {
     local_private_key: [32]u8 = [_]u8{0} ** 32,
     local_public_key: [32]u8 = [_]u8{0} ** 32,
     amnezia_params: protocol_mod.AmneziaParams = .{},
-    mutex: std.Thread.Mutex = .{},
+    mutex: SpinLock = .{},
     active_server_idx: usize = 0,
     server_addr: ?std.net.Address = null,
     next_client_ip: std.atomic.Value(u32) = std.atomic.Value(u32).init(0x0a2a0002),
