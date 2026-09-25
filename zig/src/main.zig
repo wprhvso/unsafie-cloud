@@ -7,9 +7,14 @@ const learner_mod = @import("routing/learner.zig");
 const rules_mod = @import("routing/rules.zig");
 
 var should_exit = std.atomic.Value(bool).init(false);
+var signal_count = std.atomic.Value(u8).init(0);
 
 fn handleSignal(sig: i32) callconv(.c) void {
     _ = sig;
+    const prev = signal_count.fetchAdd(1, .seq_cst);
+    if (prev >= 1) {
+        std.posix.exit(130);
+    }
     should_exit.store(true, .seq_cst);
 }
 
@@ -71,7 +76,7 @@ pub fn main() !void {
     jsonLog("INFO", "amnezia", "running", "AmneziaWG node active with in-memory state and smart routing");
 
     while (!should_exit.load(.seq_cst)) {
-        std.Thread.sleep(100 * std.time.ns_per_ms);
+        std.Thread.sleep(20 * std.time.ns_per_ms);
     }
 
     jsonLog("INFO", "bootstrap", "stopping", "Stopping unsafie node");
