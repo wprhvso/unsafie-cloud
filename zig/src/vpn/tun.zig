@@ -134,8 +134,16 @@ pub const TunDevice = struct {
         if (self.wintun_dev) |*wdev| {
             return wdev.readPacket(buf);
         }
-        if (builtin.os.tag == .windows) return 0;
-        if (self.fd < 0) return 0;
+        if (builtin.os.tag == .windows or self.fd < 0) return 0;
+
+        var pfd = [1]std.posix.pollfd{.{
+            .fd = self.fd,
+            .events = std.posix.POLL.IN,
+            .revents = 0,
+        }};
+        const rc = std.posix.poll(&pfd, 100) catch return 0;
+        if (rc == 0 or (pfd[0].revents & std.posix.POLL.IN) == 0) return 0;
+
         return std.posix.read(self.fd, buf);
     }
 
@@ -143,8 +151,7 @@ pub const TunDevice = struct {
         if (self.wintun_dev) |*wdev| {
             return wdev.writePacket(buf);
         }
-        if (builtin.os.tag == .windows) return buf.len;
-        if (self.fd < 0) return buf.len;
+        if (builtin.os.tag == .windows or self.fd < 0) return buf.len;
         return std.posix.write(self.fd, buf);
     }
 };

@@ -6,6 +6,9 @@ fix:
 run:
     cd zig && zig build run
 
+gen-rules:
+    cd zig && zig build gen-rules
+
 build-static:
     cd zig && zig build -Doptimize=ReleaseFast
 

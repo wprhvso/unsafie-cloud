@@ -76,13 +76,13 @@ pub const DnsServer = struct {
     pub fn stop(self: *DnsServer) void {
         if (!self.running.load(.seq_cst)) return;
         self.running.store(false, .seq_cst);
-        if (self.sock_fd >= 0) {
-            std.posix.close(self.sock_fd);
-            self.sock_fd = -1;
-        }
         if (self.thread) |t| {
             t.join();
             self.thread = null;
+        }
+        if (self.sock_fd >= 0) {
+            std.posix.close(self.sock_fd);
+            self.sock_fd = -1;
         }
     }
 
@@ -92,6 +92,16 @@ pub const DnsServer = struct {
         var ans_buf: [2048]u8 = undefined;
 
         while (self.running.load(.seq_cst)) {
+            if (self.sock_fd < 0) break;
+
+            var pfd = [1]std.posix.pollfd{.{
+                .fd = self.sock_fd,
+                .events = std.posix.POLL.IN,
+                .revents = 0,
+            }};
+            const rc = std.posix.poll(&pfd, 100) catch break;
+            if (rc == 0 or (pfd[0].revents & std.posix.POLL.IN) == 0) continue;
+
             var src_addr: std.posix.sockaddr.in = undefined;
             var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr.in);
 
@@ -103,7 +113,6 @@ pub const DnsServer = struct {
                 &addr_len,
             ) catch {
                 if (!self.running.load(.seq_cst)) break;
-                std.Thread.sleep(10 * std.time.ns_per_ms);
                 continue;
             };
 
@@ -113,6 +122,19 @@ pub const DnsServer = struct {
             if (parsed) |info| {
                 if (self.static_hosts.get(info.domain)) |static_ip| {
                     if (buildAAnswer(buf[0..n], static_ip, &ans_buf)) |ans_len| {
+                        _ = std.posix.sendto(
+                            self.sock_fd,
+                            ans_buf[0..ans_len],
+                            0,
+                            @ptrCast(&src_addr),
+                            addr_len,
+                        ) catch {};
+                        continue;
+                    }
+                }
+
+                if (std.mem.endsWith(u8, info.domain, ".internal")) {
+                    if (buildAAnswer(buf[0..n], 0x0a2a0001, &ans_buf)) |ans_len| {
                         _ = std.posix.sendto(
                             self.sock_fd,
                             ans_buf[0..ans_len],
@@ -195,11 +217,13 @@ pub const DnsServer = struct {
     }
 
     fn extractLearnedIps(self: *DnsServer, resp: []const u8, domain: []const u8) void {
-        var should_learn = false;
-        for (self.router.direct_domains.items) |pat| {
-            if (router_mod.SmartRouter.matchesDomain(pat, domain)) {
-                should_learn = true;
-                break;
+        var should_learn = self.router.is_russian_client and self.router.rules_engine.matchDomain(domain);
+        if (!should_learn) {
+            for (self.router.direct_domains.items) |pat| {
+                if (router_mod.SmartRouter.matchesDomain(pat, domain)) {
+                    should_learn = true;
+                    break;
+                }
             }
         }
         if (!should_learn) return;
