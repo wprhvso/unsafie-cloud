@@ -214,6 +214,7 @@ pub const AmneziaEngine = struct {
         self.running.store(true, .seq_cst);
 
         if (self.config.node.mode == .server) {
+            sys.setupServerNetworking(self.config.node.vpn_iface, self.config.node.vpn_ip, self.config.node.vpn_subnet, self.config.node.mtu);
             self.dns_srv.start() catch {};
         }
 
@@ -230,6 +231,10 @@ pub const AmneziaEngine = struct {
         if (!self.running.load(.seq_cst)) return;
         self.running.store(false, .seq_cst);
 
+        if (self.config.node.mode == .client) {
+            const s_ep = if (self.config.node.servers.len > 0) self.config.node.servers[self.active_server_idx % self.config.node.servers.len] else null;
+            sys.teardownClientNetworking(self.config.node.vpn_iface, s_ep);
+        }
         self.dns_srv.stop();
         self.tun.deinit();
 
@@ -253,6 +258,9 @@ pub const AmneziaEngine = struct {
         if (self.config.node.mode == .client and self.config.node.smart_routing) {
             self.performStunLocalCheck();
         }
+
+        const s_ep = if (self.config.node.servers.len > 0) self.config.node.servers[self.active_server_idx % self.config.node.servers.len] else null;
+        sys.setupClientNetworking(self.config.node.vpn_iface, "10.42.0.2/16", s_ep, self.config.node.mtu);
 
         self.sendHandshakeInit();
     }

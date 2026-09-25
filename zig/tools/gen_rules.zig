@@ -1,10 +1,32 @@
-const linux = std.os.linux;
 const std = @import("std");
+const linux = std.os.linux;
 
 pub const Ipv4Range = struct {
     start: u32,
     end: u32,
 };
+
+fn getCliArg(allocator: std.mem.Allocator) ?[]const u8 {
+    const flags = linux.O{ .ACCMODE = .RDONLY };
+    const fd_rc = linux.open("/proc/self/cmdline", flags, 0);
+    const fd: i32 = @intCast(fd_rc);
+    if (fd < 0) return null;
+    defer _ = linux.close(fd);
+
+    var buf: [4096]u8 = undefined;
+    const n_rc = linux.read(fd, &buf, buf.len);
+    if (n_rc <= 0) return null;
+    const n: usize = @intCast(n_rc);
+
+    var it = std.mem.splitScalar(u8, buf[0..n], 0);
+    _ = it.next();
+    if (it.next()) |arg1| {
+        if (arg1.len > 0) {
+            return allocator.dupe(u8, arg1) catch null;
+        }
+    }
+    return null;
+}
 
 pub fn buildRulesBin(
     allocator: std.mem.Allocator,
@@ -79,14 +101,11 @@ fn writeStringTable(
     try body.appendSlice(allocator, blob.items);
 }
 
-pub fn main(init: std.process.Init) !void {
-    const allocator = init.gpa;
-
-    var it = init.minimal.args.iterate();
-    _ = it.skip();
+pub fn main() !void {
+    const allocator = std.heap.page_allocator;
 
     var out_path: []const u8 = "rules.bin";
-    if (it.next()) |p| {
+    if (getCliArg(allocator)) |p| {
         out_path = p;
     }
 

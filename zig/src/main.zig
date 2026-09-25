@@ -8,10 +8,15 @@ const learner_mod = @import("routing/learner.zig");
 const rules_mod = @import("routing/rules.zig");
 const sys = @import("sys.zig");
 
+const SigParam = if (@hasDecl(std.os.linux, "SIG") and @typeInfo(std.os.linux.SIG) == .@"enum")
+    std.os.linux.SIG
+else
+    i32;
+
 var should_exit = std.atomic.Value(bool).init(false);
 var signal_count = std.atomic.Value(u8).init(0);
 
-fn handleSignal(sig: linux.SIG) callconv(.c) void {
+fn handleSignal(sig: SigParam) callconv(.c) void {
     _ = sig;
     const prev = signal_count.fetchAdd(1, .seq_cst);
     if (prev >= 1) {
@@ -38,13 +43,11 @@ fn jsonLog(level: []const u8, subsystem: []const u8, event: []const u8, message:
     );
 }
 
-pub fn main(init: std.process.Init) !void {
-    const allocator = init.gpa;
+pub fn main() !void {
+    const allocator = std.heap.page_allocator;
 
-    var it = init.minimal.args.iterate();
-    _ = it.skip();
     var config_path: []const u8 = "unsafie.yaml";
-    if (it.next()) |arg| {
+    if (sys.getCliArg(allocator)) |arg| {
         if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             std.debug.print("Usage: unsafie [path/to/unsafie.yaml]\n", .{});
             return;
