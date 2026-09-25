@@ -190,7 +190,7 @@ pub const FullConfig = struct {
     pub fn saveToFile(self: *const FullConfig, path: []const u8) !void {
         const file = try std.fs.cwd().createFile(path, .{ .truncate = true });
         defer file.close();
-        var buf = std.ArrayList(u8){};
+        var buf = std.ArrayList(u8){ .items = &.{}, .capacity = 0 };
         defer buf.deinit(std.heap.page_allocator);
         try self.serialize(buf.writer(std.heap.page_allocator));
         try file.writeAll(buf.items);
@@ -242,13 +242,13 @@ pub fn parseYaml(allocator: std.mem.Allocator, input: []const u8) !FullConfig {
 
     var cfg = FullConfig{ .arena = arena_ptr };
 
-    var servers_list = std.ArrayList([]const u8){};
-    var direct_domains = std.ArrayList([]const u8){};
-    var direct_cidrs = std.ArrayList([]const u8){};
-    var blocked_domains = std.ArrayList([]const u8){};
-    var routed_domains = std.ArrayList([]const u8){};
-    var upstreams = std.ArrayList([]const u8){};
-    var hosts_list = std.ArrayList(HostRecord){};
+    var servers_list = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
+    var direct_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
+    var direct_cidrs = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
+    var blocked_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
+    var routed_domains = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
+    var upstreams = std.ArrayList([]const u8){ .items = &.{}, .capacity = 0 };
+    var hosts_list = std.ArrayList(HostRecord){ .items = &.{}, .capacity = 0 };
 
     var current_section: []const u8 = "";
     var current_subsection: []const u8 = "";

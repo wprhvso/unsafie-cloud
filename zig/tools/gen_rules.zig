@@ -12,7 +12,7 @@ pub fn buildRulesBin(
     exacts: []const []const u8,
     keywords: []const []const u8,
 ) ![]u8 {
-    var body = std.ArrayList(u8){};
+    var body = std.ArrayList(u8){ .items = &.{}, .capacity = 0 };
     defer body.deinit(allocator);
 
     var header = [_]u8{0} ** 128;
@@ -55,7 +55,7 @@ fn writeStringTable(
     std.mem.writeInt(u32, header[tbl_off_hdr .. tbl_off_hdr + 4][0..4], tbl_off, .little);
     std.mem.writeInt(u32, header[count_hdr .. count_hdr + 4][0..4], @intCast(items.len), .little);
 
-    var blob = std.ArrayList(u8){};
+    var blob = std.ArrayList(u8){ .items = &.{}, .capacity = 0 };
     defer blob.deinit(allocator);
 
     var pos: u32 = 0;

@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const LearnerSet = struct {
     allocator: std.mem.Allocator,
-    mutex: std.Thread.RwLock = .{},
+    mutex: std.Thread.Mutex = .{},
     seen: std.AutoHashMap(u32, i64),
     ttl_seconds: i64 = 1800,
 
@@ -26,8 +26,8 @@ pub const LearnerSet = struct {
     }
 
     pub fn has(self: *LearnerSet, ip: u32) bool {
-        self.mutex.lockShared();
-        defer self.mutex.unlockShared();
+        self.mutex.lock();
+        defer self.mutex.unlock();
         const expires = self.seen.get(ip) orelse return false;
         return std.time.timestamp() < expires;
     }
@@ -36,7 +36,7 @@ pub const LearnerSet = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         const now = std.time.timestamp();
-        var to_remove = std.ArrayList(u32){};
+        var to_remove = std.ArrayList(u32){ .items = &.{}, .capacity = 0 };
         defer to_remove.deinit(self.allocator);
 
         var it = self.seen.iterator();

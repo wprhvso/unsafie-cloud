@@ -23,7 +23,7 @@ pub const AmneziaEngine = struct {
     local_private_key: [32]u8 = [_]u8{0} ** 32,
     local_public_key: [32]u8 = [_]u8{0} ** 32,
     amnezia_params: protocol_mod.AmneziaParams = .{},
-    mutex: std.Thread.RwLock = .{},
+    mutex: std.Thread.Mutex = .{},
     active_server_idx: usize = 0,
     server_addr: ?std.net.Address = null,
     next_client_ip: std.atomic.Value(u32) = std.atomic.Value(u32).init(0x0a2a0002),
@@ -72,7 +72,7 @@ pub const AmneziaEngine = struct {
             .router = router,
             .learner = learner,
             .dns_srv = dns_srv,
-            .peers = std.ArrayList(*peer_mod.PeerSession){},
+            .peers = std.ArrayList(*peer_mod.PeerSession){ .items = &.{}, .capacity = 0 },
             .udp_socket = -1,
             .running = std.atomic.Value(bool).init(false),
             .threads = [_]?std.Thread{null} ** 4,
@@ -502,11 +502,11 @@ pub const AmneziaEngine = struct {
 
                 _ = self.tun.writePacket(decrypted_buf[0..ciphertext.len]) catch {};
 
-                self.mutex.lockShared();
+                self.mutex.lock();
                 if (self.peers.items.len > 0) {
                     self.peers.items[0].recordRx(packet.len);
                 }
-                self.mutex.unlockShared();
+                self.mutex.unlock();
             },
             .push_signal => {
                 if (packet.len < 16) return;
@@ -530,8 +530,8 @@ pub const AmneziaEngine = struct {
     }
 
     pub fn broadcastPushReload(self: *AmneziaEngine) void {
-        self.mutex.lockShared();
-        defer self.mutex.unlockShared();
+        self.mutex.lock();
+        defer self.mutex.unlock();
 
         var reload_buf: [32]u8 = undefined;
         const total = protocol_mod.buildPushReload(&reload_buf, std.time.timestamp()) catch return;
@@ -577,8 +577,8 @@ pub const AmneziaEngine = struct {
     }
 
     fn sendViaMesh(self: *AmneziaEngine, ip_packet: []const u8, dst_ip: u32) void {
-        self.mutex.lockShared();
-        defer self.mutex.unlockShared();
+        self.mutex.lock();
+        defer self.mutex.unlock();
 
         var target_peer: ?*peer_mod.PeerSession = null;
         for (self.peers.items) |p| {
@@ -652,7 +652,7 @@ pub const AmneziaEngine = struct {
             }
 
             if (tick % 25 == 0) {
-                self.mutex.lockShared();
+                self.mutex.lock();
                 for (self.peers.items) |p| {
                     if (p.endpoint) |ep| {
                         if (p.persistent_keepalive > 0) {
@@ -675,7 +675,7 @@ pub const AmneziaEngine = struct {
                         }
                     }
                 }
-                self.mutex.unlockShared();
+                self.mutex.unlock();
             }
         }
     }
