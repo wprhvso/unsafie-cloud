@@ -124,6 +124,19 @@ pub const DnsServer = struct {
                     }
                 }
 
+                if (std.mem.endsWith(u8, info.domain, ".internal")) {
+                    if (buildAAnswer(buf[0..n], 0x0a2a0001, &ans_buf)) |ans_len| {
+                        _ = std.posix.sendto(
+                            self.sock_fd,
+                            ans_buf[0..ans_len],
+                            0,
+                            @ptrCast(&src_addr),
+                            addr_len,
+                        ) catch {};
+                        continue;
+                    }
+                }
+
                 for (self.router.blocked_domains.items) |pat| {
                     if (router_mod.SmartRouter.matchesDomain(pat, info.domain)) {
                         if (buildAAnswer(buf[0..n], 0, &ans_buf)) |ans_len| {
@@ -195,11 +208,13 @@ pub const DnsServer = struct {
     }
 
     fn extractLearnedIps(self: *DnsServer, resp: []const u8, domain: []const u8) void {
-        var should_learn = false;
-        for (self.router.direct_domains.items) |pat| {
-            if (router_mod.SmartRouter.matchesDomain(pat, domain)) {
-                should_learn = true;
-                break;
+        var should_learn = self.router.is_russian_client and self.router.rules_engine.matchDomain(domain);
+        if (!should_learn) {
+            for (self.router.direct_domains.items) |pat| {
+                if (router_mod.SmartRouter.matchesDomain(pat, domain)) {
+                    should_learn = true;
+                    break;
+                }
             }
         }
         if (!should_learn) return;

@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const STUN_MAGIC: u32 = 0x5354554e;
+pub const PUSH_MAGIC: u32 = 0x50555348;
 pub const SYNC_MAGIC: u32 = 0x53594e43;
 
 pub const AmneziaParams = struct {
@@ -19,16 +21,26 @@ pub const PacketType = enum {
     handshake_resp,
     cookie,
     transport_data,
+    stun_req,
+    stun_resp,
+    push_signal,
     mesh_sync,
     unknown,
 };
 
-pub fn identifyPacket(header_bytes: [4]u8, params: AmneziaParams) PacketType {
-    const val = std.mem.readInt(u32, &header_bytes, .little);
+pub fn identifyPacket(packet: []const u8, params: AmneziaParams) PacketType {
+    if (packet.len < 4) return .unknown;
+    const val = std.mem.readInt(u32, packet[0..4][0..4], .little);
+
     if (val == params.h1) return .handshake_init;
     if (val == params.h2) return .handshake_resp;
     if (val == params.h3) return .cookie;
     if (val == params.h4) return .transport_data;
+    if (val == STUN_MAGIC) {
+        if (packet.len >= 22) return .stun_resp;
+        if (packet.len >= 16) return .stun_req;
+    }
+    if (val == PUSH_MAGIC) return .push_signal;
     if (val == SYNC_MAGIC) return .mesh_sync;
     return .unknown;
 }
@@ -54,6 +66,32 @@ pub fn sendJunkPackets(
     }
 }
 
+pub fn buildStunRequest(out: []u8, tx_id: [12]u8) !usize {
+    if (out.len < 16) return error.BufferTooSmall;
+    std.mem.writeInt(u32, out[0..4][0..4], STUN_MAGIC, .little);
+    @memcpy(out[4..16], &tx_id);
+    return 16;
+}
+
+pub fn buildStunResponse(out: []u8, tx_id: [12]u8, ip: u32, port: u16) !usize {
+    if (out.len < 22) return error.BufferTooSmall;
+    std.mem.writeInt(u32, out[0..4][0..4], STUN_MAGIC, .little);
+    @memcpy(out[4..16], &tx_id);
+    std.mem.writeInt(u32, out[16..20][0..4], ip, .big);
+    std.mem.writeInt(u16, out[20..22][0..2], port, .big);
+    return 22;
+}
+
+pub fn parseStunResponse(packet: []const u8, expected_tx: [12]u8) ?struct { ip: u32, port: u16 } {
+    if (packet.len < 22) return null;
+    const val = std.mem.readInt(u32, packet[0..4][0..4], .little);
+    if (val != STUN_MAGIC) return null;
+    if (!std.mem.eql(u8, packet[4..16], &expected_tx)) return null;
+    const ip = std.mem.readInt(u32, packet[16..20][0..4], .big);
+    const port = std.mem.readInt(u16, packet[20..22][0..2], .big);
+    return .{ .ip = ip, .port = port };
+}
+
 pub fn buildHandshakeInit(
     out: []u8,
     params: AmneziaParams,
@@ -67,8 +105,8 @@ pub fn buildHandshakeInit(
     const total_len = 148 + params.s1;
     if (out.len < total_len) return error.BufferTooSmall;
 
-    std.mem.writeInt(u32, out[0..4], params.h1, .little);
-    std.mem.writeInt(u32, out[4..8], sender_index, .little);
+    std.mem.writeInt(u32, out[0..4][0..4], params.h1, .little);
+    std.mem.writeInt(u32, out[4..8][0..4], sender_index, .little);
     @memcpy(out[8..40], &ephemeral_pub);
     @memcpy(out[40..88], &enc_static);
     @memcpy(out[88..116], &enc_timestamp);
@@ -95,9 +133,9 @@ pub fn buildHandshakeResp(
     const total_len = 92 + params.s2;
     if (out.len < total_len) return error.BufferTooSmall;
 
-    std.mem.writeInt(u32, out[0..4], params.h2, .little);
-    std.mem.writeInt(u32, out[4..8], sender_index, .little);
-    std.mem.writeInt(u32, out[8..12], receiver_index, .little);
+    std.mem.writeInt(u32, out[0..4][0..4], params.h2, .little);
+    std.mem.writeInt(u32, out[4..8][0..4], sender_index, .little);
+    std.mem.writeInt(u32, out[8..12][0..4], receiver_index, .little);
     @memcpy(out[12..44], &ephemeral_pub);
     @memcpy(out[44..60], &enc_empty);
     @memcpy(out[60..76], &mac1);
@@ -121,31 +159,32 @@ pub fn buildTransportPacket(
     const total_len = 4 + 4 + 8 + ciphertext.len + 16;
     if (out.len < total_len) return error.BufferTooSmall;
 
-    std.mem.writeInt(u32, out[0..4], params.h4, .little);
-    std.mem.writeInt(u32, out[4..8], receiver_index, .little);
-    std.mem.writeInt(u64, out[8..16], counter, .little);
+    std.mem.writeInt(u32, out[0..4][0..4], params.h4, .little);
+    std.mem.writeInt(u32, out[4..8][0..4], receiver_index, .little);
+    std.mem.writeInt(u64, out[8..16][0..8], counter, .little);
     @memcpy(out[16 .. 16 + ciphertext.len], ciphertext);
     @memcpy(out[16 + ciphertext.len .. total_len], &tag);
 
     return total_len;
 }
 
-pub fn buildSyncPacket(
-    out: []u8,
-    timestamp: i64,
-    sender_pubkey: [32]u8,
-    mac: [16]u8,
-    yaml_payload: []const u8,
-) !usize {
-    const total_len = 4 + 8 + 32 + 16 + 4 + yaml_payload.len;
-    if (out.len < total_len) return error.BufferTooSmall;
+pub fn buildPushReload(out: []u8, timestamp: i64) !usize {
+    if (out.len < 16) return error.BufferTooSmall;
+    std.mem.writeInt(u32, out[0..4][0..4], PUSH_MAGIC, .little);
+    std.mem.writeInt(u32, out[4..8][0..4], 2, .little);
+    std.mem.writeInt(i64, out[8..16][0..8], timestamp, .little);
+    return 16;
+}
 
-    std.mem.writeInt(u32, out[0..4], SYNC_MAGIC, .little);
-    std.mem.writeInt(i64, out[4..12], timestamp, .little);
-    @memcpy(out[12..44], &sender_pubkey);
-    @memcpy(out[44..60], &mac);
-    std.mem.writeInt(u32, out[60..64], @intCast(yaml_payload.len), .little);
-    @memcpy(out[64..total_len], yaml_payload);
+pub fn buildPushUpdate(out: []u8, timestamp: i64, auth_hmac: [16]u8, payload: []const u8) !usize {
+    const total = 4 + 4 + 8 + 16 + 4 + payload.len;
+    if (out.len < total) return error.BufferTooSmall;
 
-    return total_len;
+    std.mem.writeInt(u32, out[0..4][0..4], PUSH_MAGIC, .little);
+    std.mem.writeInt(u32, out[4..8][0..4], 1, .little);
+    std.mem.writeInt(i64, out[8..16][0..8], timestamp, .little);
+    @memcpy(out[16..32], &auth_hmac);
+    std.mem.writeInt(u32, out[32..36][0..4], @intCast(payload.len), .little);
+    @memcpy(out[36..total], payload);
+    return total;
 }
