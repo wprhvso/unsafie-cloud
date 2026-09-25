@@ -1,3 +1,13 @@
+pub fn isSuccess(rc: usize) bool {
+    const s: isize = @bitCast(rc);
+    return s >= 0;
+}
+
+pub fn isError(rc: usize) bool {
+    const s: isize = @bitCast(rc);
+    return s < 0;
+}
+
 const std = @import("std");
 const linux = std.os.linux;
 const netlink = @import("vpn/platform/netlink.zig");
@@ -32,13 +42,13 @@ pub fn sleepMs(ms: u32) void {
 pub fn getCliArg(allocator: std.mem.Allocator) ?[]const u8 {
     const flags = linux.O{ .ACCMODE = .RDONLY };
     const fd_rc = linux.open("/proc/self/cmdline", flags, 0);
-    if (linux.E.init(fd_rc) != .SUCCESS) return null;
+    if (isError(fd_rc)) return null;
     const fd: i32 = @intCast(fd_rc);
     defer _ = linux.close(fd);
 
     var buf: [4096]u8 = undefined;
     const n_rc = linux.read(fd, &buf, buf.len);
-    if (linux.E.init(n_rc) != .SUCCESS or n_rc == 0) return null;
+    if (isError(n_rc) or n_rc == 0) return null;
     const n: usize = @intCast(n_rc);
 
     var it = std.mem.splitScalar(u8, buf[0..n], 0);
@@ -116,7 +126,7 @@ fn tryApplyMasquerade(vpn_subnet: []const u8, ifname: []const u8) void {
 pub fn setupServerNetworking(ifname: []const u8, vpn_ip: []const u8, vpn_subnet: []const u8, mtu: u32) void {
     const f_flags = linux.O{ .ACCMODE = .WRONLY, .TRUNC = true };
     const f_rc = linux.open("/proc/sys/net/ipv4/ip_forward", f_flags, 0);
-    if (linux.E.init(f_rc) == .SUCCESS) {
+    if (isSuccess(f_rc)) {
         const f_fd: i32 = @intCast(f_rc);
         defer _ = linux.close(f_fd);
         _ = linux.write(f_fd, "1\n", 2);

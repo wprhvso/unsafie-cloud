@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const linux = std.os.linux;
 
 pub const AF_NETLINK: u32 = 16;
 pub const NETLINK_ROUTE: u32 = 0;
@@ -55,6 +56,15 @@ pub const Uplink = struct {
 
 var cached_uplink: ?Uplink = null;
 
+fn sleepMs(ms: u32) void {
+    var req = linux.timespec{
+        .sec = @intCast(@divTrunc(ms, 1000)),
+        .nsec = @intCast(@as(u64, ms % 1000) * 1_000_000),
+    };
+    var rem: linux.timespec = undefined;
+    _ = linux.nanosleep(&req, &rem);
+}
+
 pub const Netlink = struct {
     pub fn rtaAlign(len: usize) usize {
         return (len + 3) & ~@as(usize, 3);
@@ -63,11 +73,15 @@ pub const Netlink = struct {
     pub fn detectUplink() ?Uplink {
         if (builtin.os.tag != .linux) return null;
 
-        const file = std.fs.openFileAbsolute("/proc/net/route", .{}) catch return null;
-        defer file.close();
+        const fd_rc = linux.open("/proc/net/route", .{}, 0);
+        if (@as(isize, @bitCast(fd_rc)) < 0) return null;
+        const fd: i32 = @intCast(fd_rc);
+        defer _ = linux.close(fd);
 
         var buf: [4096]u8 = undefined;
-        const len = file.readAll(&buf) catch return null;
+        const len_rc = linux.read(fd, &buf, buf.len);
+        if (@as(isize, @bitCast(len_rc)) <= 0) return null;
+        const len: usize = @intCast(len_rc);
         const content = buf[0..len];
 
         var line_it = std.mem.splitScalar(u8, content, '\n');
@@ -103,8 +117,10 @@ pub const Netlink = struct {
     pub fn getIfIndex(ifname: []const u8) ?i32 {
         if (builtin.os.tag != .linux) return null;
 
-        const sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch return null;
-        defer std.posix.close(sock);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        if (@as(isize, @bitCast(sock_rc)) < 0) return null;
+        const sock: i32 = @intCast(sock_rc);
+        defer _ = linux.close(sock);
 
         var ifr: extern struct {
             name: [16]u8 = std.mem.zeroes([16]u8),
@@ -115,7 +131,7 @@ pub const Netlink = struct {
         const copy_len = @min(ifname.len, 15);
         @memcpy(ifr.name[0..copy_len], ifname[0..copy_len]);
 
-        const rc = std.posix.system.ioctl(sock, 0x8933, @intFromPtr(&ifr));
+        const rc = linux.ioctl(sock, 0x8933, @intFromPtr(&ifr));
         if (rc != 0) return null;
         return ifr.ifindex;
     }
@@ -123,8 +139,10 @@ pub const Netlink = struct {
     pub fn setLinkUp(ifname: []const u8) !void {
         if (builtin.os.tag != .linux) return;
 
-        const sock = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0);
-        defer std.posix.close(sock);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        if (@as(isize, @bitCast(sock_rc)) < 0) return error.SocketFailed;
+        const sock: i32 = @intCast(sock_rc);
+        defer _ = linux.close(sock);
 
         var ifr: extern struct {
             name: [16]u8 = std.mem.zeroes([16]u8),
@@ -138,16 +156,18 @@ pub const Netlink = struct {
         const copy_len = @min(ifname.len, 15);
         @memcpy(ifr.name[0..copy_len], ifname[0..copy_len]);
 
-        _ = std.posix.system.ioctl(sock, 0x8913, @intFromPtr(&ifr));
+        _ = linux.ioctl(sock, 0x8913, @intFromPtr(&ifr));
         ifr.data.flags |= 0x0001 | 0x0040;
-        _ = std.posix.system.ioctl(sock, 0x8914, @intFromPtr(&ifr));
+        _ = linux.ioctl(sock, 0x8914, @intFromPtr(&ifr));
     }
 
     pub fn setIfAddress(ifname: []const u8, ip: u32, netmask: u32) !void {
         if (builtin.os.tag != .linux) return;
 
-        const sock = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0);
-        defer std.posix.close(sock);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        if (@as(isize, @bitCast(sock_rc)) < 0) return error.SocketFailed;
+        const sock: i32 = @intCast(sock_rc);
+        defer _ = linux.close(sock);
 
         var ifr: extern struct {
             name: [16]u8 = std.mem.zeroes([16]u8),
@@ -165,18 +185,20 @@ pub const Netlink = struct {
 
         ifr.addr.family = 2;
         ifr.addr.ip = @byteSwap(ip);
-        _ = std.posix.system.ioctl(sock, 0x8916, @intFromPtr(&ifr));
+        _ = linux.ioctl(sock, 0x8916, @intFromPtr(&ifr));
 
         ifr.addr.ip = @byteSwap(netmask);
-        _ = std.posix.system.ioctl(sock, 0x891c, @intFromPtr(&ifr));
+        _ = linux.ioctl(sock, 0x891c, @intFromPtr(&ifr));
     }
 
     pub fn setMtu(ifname: []const u8, mtu: u32) !void {
         if (builtin.os.tag != .linux) return;
         if (mtu == 0) return;
 
-        const sock = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0);
-        defer std.posix.close(sock);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        if (@as(isize, @bitCast(sock_rc)) < 0) return error.SocketFailed;
+        const sock: i32 = @intCast(sock_rc);
+        defer _ = linux.close(sock);
 
         var ifr: extern struct {
             name: [16]u8 = std.mem.zeroes([16]u8),
@@ -191,14 +213,16 @@ pub const Netlink = struct {
         @memcpy(ifr.name[0..copy_len], ifname[0..copy_len]);
         ifr.data.mtu = @intCast(mtu);
 
-        _ = std.posix.system.ioctl(sock, 0x8922, @intFromPtr(&ifr));
+        _ = linux.ioctl(sock, 0x8922, @intFromPtr(&ifr));
     }
 
     pub fn setLinkDown(ifname: []const u8) void {
         if (builtin.os.tag != .linux) return;
 
-        const sock = std.posix.socket(std.posix.AF.INET, std.posix.SOCK.DGRAM, 0) catch return;
-        defer std.posix.close(sock);
+        const sock_rc = linux.socket(linux.AF.INET, linux.SOCK.DGRAM, 0);
+        if (@as(isize, @bitCast(sock_rc)) < 0) return;
+        const sock: i32 = @intCast(sock_rc);
+        defer _ = linux.close(sock);
 
         var ifr: extern struct {
             name: [16]u8 = std.mem.zeroes([16]u8),
@@ -212,17 +236,19 @@ pub const Netlink = struct {
         const copy_len = @min(ifname.len, 15);
         @memcpy(ifr.name[0..copy_len], ifname[0..copy_len]);
 
-        _ = std.posix.system.ioctl(sock, 0x8913, @intFromPtr(&ifr));
+        _ = linux.ioctl(sock, 0x8913, @intFromPtr(&ifr));
         ifr.data.flags &= ~@as(c_short, 0x0001);
-        _ = std.posix.system.ioctl(sock, 0x8914, @intFromPtr(&ifr));
+        _ = linux.ioctl(sock, 0x8914, @intFromPtr(&ifr));
     }
 
     pub fn addRoute(ifindex: i32, dst_ip: u32, prefix_len: u8, gateway: ?u32) !void {
         if (builtin.os.tag != .linux) return;
         if (ifindex <= 0) return;
 
-        const sock = std.posix.socket(AF_NETLINK, std.posix.SOCK.RAW, NETLINK_ROUTE) catch return;
-        defer std.posix.close(sock);
+        const sock_rc = linux.socket(AF_NETLINK, linux.SOCK.RAW, NETLINK_ROUTE);
+        if (@as(isize, @bitCast(sock_rc)) < 0) return;
+        const sock: i32 = @intCast(sock_rc);
+        defer _ = linux.close(sock);
 
         var buf = std.mem.zeroes([512]u8);
         var offset: usize = 0;
@@ -265,15 +291,17 @@ pub const Netlink = struct {
         @memcpy(buf[0..hdr_len], std.mem.asBytes(&nlh));
         @memcpy(buf[hdr_len .. hdr_len + rtm_len], std.mem.asBytes(&rtm));
 
-        _ = std.posix.send(sock, buf[0..offset], 0) catch {};
+        _ = linux.sendto(sock, buf[0..offset].ptr, offset, 0, null, 0);
     }
 
     pub fn delRoute(ifindex: i32, dst_ip: u32, prefix_len: u8) !void {
         if (builtin.os.tag != .linux) return;
         if (ifindex <= 0) return;
 
-        const sock = std.posix.socket(AF_NETLINK, std.posix.SOCK.RAW, NETLINK_ROUTE) catch return;
-        defer std.posix.close(sock);
+        const sock_rc = linux.socket(AF_NETLINK, linux.SOCK.RAW, NETLINK_ROUTE);
+        if (@as(isize, @bitCast(sock_rc)) < 0) return;
+        const sock: i32 = @intCast(sock_rc);
+        defer _ = linux.close(sock);
 
         var buf = std.mem.zeroes([512]u8);
         const hdr_len = @sizeOf(nlmsghdr);
@@ -308,7 +336,7 @@ pub const Netlink = struct {
         @memcpy(buf[0..hdr_len], std.mem.asBytes(&nlh));
         @memcpy(buf[hdr_len .. hdr_len + rtm_len], std.mem.asBytes(&rtm));
 
-        _ = std.posix.send(sock, buf[0..offset], 0) catch {};
+        _ = linux.sendto(sock, buf[0..offset].ptr, offset, 0, null, 0);
     }
 
     pub fn addBypassRoute(ip: u32) void {
@@ -370,7 +398,7 @@ pub const Netlink = struct {
                 vpn_idx = idx;
                 break;
             }
-            std.Thread.sleep(20 * std.time.ns_per_ms);
+            sleepMs(20);
         }
 
         if (vpn_idx <= 0) {
@@ -416,45 +444,61 @@ pub const Netlink = struct {
     fn setupDnsOverride() void {
         if (builtin.os.tag != .linux) return;
 
-        if (std.fs.openFileAbsolute("/etc/resolv.conf", .{ .mode = .read_only })) |orig| {
+        const orig_rc = linux.open("/etc/resolv.conf", .{}, 0);
+        if (@as(isize, @bitCast(orig_rc)) >= 0) {
+            const orig_fd: i32 = @intCast(orig_rc);
             var buf: [2048]u8 = undefined;
-            const len = orig.readAll(&buf) catch 0;
-            orig.close();
+            const len_rc = linux.read(orig_fd, &buf, buf.len);
+            _ = linux.close(orig_fd);
 
-            if (len > 0) {
-                if (std.fs.createFileAbsolute("/etc/resolv.conf.unsafie.bak", .{})) |bak| {
-                    bak.writeAll(buf[0..len]) catch {};
-                    bak.close();
-                } else |_| {}
+            if (@as(isize, @bitCast(len_rc)) > 0) {
+                const len: usize = @intCast(len_rc);
+                const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+                const bak_rc = linux.open("/etc/resolv.conf.unsafie.bak", flags, 0o644);
+                if (@as(isize, @bitCast(bak_rc)) >= 0) {
+                    const bak_fd: i32 = @intCast(bak_rc);
+                    _ = linux.write(bak_fd, buf[0..len].ptr, len);
+                    _ = linux.close(bak_fd);
+                }
             }
-        } else |_| {}
+        }
 
-        if (std.fs.createFileAbsolute("/etc/resolv.conf", .{})) |f| {
-            f.writeAll("nameserver 127.0.0.1\noptions timeout:1\n") catch {};
-            f.close();
+        const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+        const f_rc = linux.open("/etc/resolv.conf", flags, 0o644);
+        if (@as(isize, @bitCast(f_rc)) >= 0) {
+            const f_fd: i32 = @intCast(f_rc);
+            const content = "nameserver 127.0.0.1\noptions timeout:1\n";
+            _ = linux.write(f_fd, content.ptr, content.len);
+            _ = linux.close(f_fd);
             std.debug.print("[DNS INIT] Configured local DNS resolver: nameserver 127.0.0.1 (/etc/resolv.conf)\n", .{});
-        } else |_| {
-            std.debug.print("[DNS WARN] Could not overwrite /etc/resolv.conf directly, trying resolvectl...\n", .{});
+        } else {
+            std.debug.print("[DNS WARN] Could not overwrite /etc/resolv.conf directly\n", .{});
         }
     }
 
     fn restoreDnsOverride() void {
         if (builtin.os.tag != .linux) return;
 
-        if (std.fs.openFileAbsolute("/etc/resolv.conf.unsafie.bak", .{ .mode = .read_only })) |bak| {
+        const bak_rc = linux.open("/etc/resolv.conf.unsafie.bak", .{}, 0);
+        if (@as(isize, @bitCast(bak_rc)) >= 0) {
+            const bak_fd: i32 = @intCast(bak_rc);
             var buf: [2048]u8 = undefined;
-            const len = bak.readAll(&buf) catch 0;
-            bak.close();
+            const len_rc = linux.read(bak_fd, &buf, buf.len);
+            _ = linux.close(bak_fd);
 
-            if (len > 0) {
-                if (std.fs.createFileAbsolute("/etc/resolv.conf", .{})) |f| {
-                    f.writeAll(buf[0..len]) catch {};
-                    f.close();
+            if (@as(isize, @bitCast(len_rc)) > 0) {
+                const len: usize = @intCast(len_rc);
+                const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+                const f_rc = linux.open("/etc/resolv.conf", flags, 0o644);
+                if (@as(isize, @bitCast(f_rc)) >= 0) {
+                    const f_fd: i32 = @intCast(f_rc);
+                    _ = linux.write(f_fd, buf[0..len].ptr, len);
+                    _ = linux.close(f_fd);
                     std.debug.print("[DNS CLEANUP] Restored original /etc/resolv.conf\n", .{});
-                } else |_| {}
+                }
             }
-            std.fs.deleteFileAbsolute("/etc/resolv.conf.unsafie.bak") catch {};
-        } else |_| {}
+            _ = linux.unlink("/etc/resolv.conf.unsafie.bak");
+        }
     }
 
     fn appendAttr(buf: []u8, offset: usize, attr_type: u16, val: []const u8) usize {

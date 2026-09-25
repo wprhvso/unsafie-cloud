@@ -27,7 +27,7 @@ pub const TunDevice = struct {
     pub fn init(allocator: std.mem.Allocator, ifname: []const u8) !TunDevice {
         const flags = linux.O{ .ACCMODE = .RDWR };
         const fd_rc = linux.open("/dev/net/tun", flags, 0);
-        if (linux.E.init(fd_rc) != .SUCCESS) {
+        if (@as(isize, @bitCast(fd_rc)) < 0) {
             return .{ .fd = -1, .name = @as([16]u8, @splat(0)), .allocator = allocator };
         }
         const fd: i32 = @intCast(fd_rc);

@@ -1,3 +1,4 @@
+const sys = @import("sys.zig");
 const std = @import("std");
 const linux = std.os.linux;
 
@@ -197,7 +198,7 @@ pub const FullConfig = struct {
 
         const flags = linux.O{ .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
         const fd_rc = linux.open(path_z, flags, 0o644);
-        if (linux.E.init(fd_rc) != .SUCCESS) return error.CannotCreateFile;
+        if (sys.isError(fd_rc)) return error.CannotCreateFile;
         const fd: i32 = @intCast(fd_rc);
         defer _ = linux.close(fd);
 
@@ -431,7 +432,7 @@ pub fn loadFromFile(allocator: std.mem.Allocator, path: []const u8) !FullConfig 
     const path_z: [*:0]const u8 = @ptrCast(&path_buf);
 
     const fd_rc = linux.open(path_z, .{}, 0);
-    if (linux.E.init(fd_rc) != .SUCCESS) return error.FileNotFound;
+    if (sys.isError(fd_rc)) return error.FileNotFound;
     const fd: i32 = @intCast(fd_rc);
     defer _ = linux.close(fd);
 
@@ -439,6 +440,6 @@ pub fn loadFromFile(allocator: std.mem.Allocator, path: []const u8) !FullConfig 
     defer allocator.free(buf);
 
     const n_rc = linux.read(fd, buf.ptr, buf.len);
-    if (linux.E.init(n_rc) != .SUCCESS) return error.ReadFailed;
+    if (sys.isError(n_rc)) return error.ReadFailed;
     return parseYaml(allocator, buf[0..@intCast(n_rc)]);
 }
