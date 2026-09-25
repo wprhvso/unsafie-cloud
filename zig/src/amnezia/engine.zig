@@ -200,16 +200,17 @@ pub const AmneziaEngine = struct {
         self.dns_srv.stop();
         self.tun.deinit();
 
+        if (self.udp_socket >= 0) {
+            const sock = self.udp_socket;
+            self.udp_socket = -1;
+            std.posix.close(sock);
+        }
+
         for (&self.threads) |*opt_t| {
             if (opt_t.*) |t| {
                 t.join();
                 opt_t.* = null;
             }
-        }
-
-        if (self.udp_socket >= 0) {
-            std.posix.close(self.udp_socket);
-            self.udp_socket = -1;
         }
     }
 
@@ -324,7 +325,7 @@ pub const AmneziaEngine = struct {
                 .events = std.posix.POLL.IN,
                 .revents = 0,
             }};
-            const rc = std.posix.poll(&pfd, 100) catch break;
+            const rc = std.posix.poll(&pfd, 50) catch break;
             if (rc == 0 or (pfd[0].revents & std.posix.POLL.IN) == 0) continue;
 
             var src_addr: std.posix.sockaddr.in = undefined;
@@ -638,7 +639,12 @@ pub const AmneziaEngine = struct {
     fn maintenanceLoop(self: *AmneziaEngine) void {
         var tick: u64 = 0;
         while (self.running.load(.seq_cst)) {
-            std.Thread.sleep(1 * std.time.ns_per_s);
+            var s: usize = 0;
+            while (s < 20 and self.running.load(.seq_cst)) : (s += 1) {
+                std.Thread.sleep(50 * std.time.ns_per_ms);
+            }
+            if (!self.running.load(.seq_cst)) break;
+
             tick += 1;
 
             if (tick % 60 == 0) {
